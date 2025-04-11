@@ -1,9 +1,20 @@
 const express = require('express');
+const path = require('path');
 const http = require('http');
 const socketIo = require('socket.io');
 
 const app = express();
 const server = http.createServer(app);
+
+// Middleware для статических файлов (должен быть в начале)
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Явный роут для главной страницы
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// Настройка Socket.IO
 const io = socketIo(server, {
   cors: {
     origin: "*",
@@ -25,10 +36,19 @@ function generateId() {
   return Math.random().toString(36).substr(2, 9);
 }
 
+// Функция проверки столкновений
+function checkCollision(attackBox, position) {
+  return (
+    attackBox.position.x + attackBox.width >= position.x &&
+    attackBox.position.x <= position.x + 50 &&
+    attackBox.position.y + attackBox.height >= position.y &&
+    attackBox.position.y <= position.y + 150
+  );
+}
+
 io.on('connection', (socket) => {
   console.log('New client connected:', socket.id);
 
-  // Создаем нового игрока
   const playerId = socket.id;
   gameState.players[playerId] = {
     id: playerId,
@@ -44,7 +64,6 @@ io.on('connection', (socket) => {
     }
   };
 
-  // Отправляем текущее состояние игры новому игроку
   socket.emit('init', { 
     playerId, 
     gameState,
@@ -56,18 +75,15 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Сообщаем другим игрокам о новом подключении
   socket.broadcast.emit('newPlayer', gameState.players[playerId]);
 
-  // Обработка движения игрока
   socket.on('playerMovement', (movementData) => {
     if (gameState.players[playerId]) {
-      gameState.players[playerId].position = movementData.position;
-      gameState.players[playerId].velocity = movementData.velocity;
-      gameState.players[playerId].lastKey = movementData.lastKey;
-      gameState.players[playerId].isAttacking = movementData.isAttacking;
+      gameState.players[playerId] = {
+        ...gameState.players[playerId],
+        ...movementData
+      };
       
-      // Рассчитываем позицию атакующего бокса
       if (movementData.isAttacking) {
         gameState.players[playerId].attackBox.position = {
           x: movementData.position.x + (movementData.lastKey === 'd' ? 100 : -100),
@@ -82,7 +98,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Обработка атаки
   socket.on('playerAttack', (attackData) => {
     if (gameState.players[playerId]) {
       gameState.players[playerId].isAttacking = true;
@@ -93,7 +108,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Обработка получения удара
   socket.on('playerHit', (hitData) => {
     if (gameState.players[hitData.targetId]) {
       gameState.players[hitData.targetId].health -= 20;
@@ -104,7 +118,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Отключение игрока
   socket.on('disconnect', () => {
     console.log('Client disconnected:', playerId);
     delete gameState.players[playerId];
@@ -112,24 +125,17 @@ io.on('connection', (socket) => {
   });
 });
 
-// Игровой цикл на сервере
-setInterval(() => {
+// Игровой цикл
+const gameLoop = setInterval(() => {
   const now = Date.now();
   const dt = (now - gameState.lastUpdateTime) / 1000;
   gameState.lastUpdateTime = now;
 
-  // Обновление позиций игроков
-  Object.keys(gameState.players).forEach(id => {
-    const player = gameState.players[id];
-    
-    // Гравитация
+  Object.values(gameState.players).forEach(player => {
     player.velocity.y += 0.5;
-    
-    // Обновление позиции
     player.position.x += player.velocity.x;
     player.position.y += player.velocity.y;
     
-    // Ограничение по земле
     if (player.position.y > 330) {
       player.position.y = 330;
       player.velocity.y = 0;
@@ -137,33 +143,35 @@ setInterval(() => {
   });
 
   // Проверка столкновений
-  Object.keys(gameState.players).forEach(id1 => {
-    Object.keys(gameState.players).forEach(id2 => {
-      if (id1 !== id2) {
-        const p1 = gameState.players[id1];
-        const p2 = gameState.players[id2];
-        
-        if (p1.isAttacking && checkCollision(p1.attackBox, p2.position)) {
-          io.emit('playerHit', {
-            attackerId: id1,
-            targetId: id2
-          });
-        }
+  const players = Object.entries(gameState.players);
+  for (let i = 0; i < players.length; i++) {
+    for (let j = i + 1; j < players.length; j++) {
+      const [id1, p1] = players[i];
+      const [id2, p2] = players[j];
+      
+      if (p1.isAttacking && checkCollision(p1.attackBox, p2.position)) {
+        io.emit('playerHit', {
+          attackerId: id1,
+          targetId: id2
+        });
       }
-    });
-  });
-
+      
+      if (p2.isAttacking && checkCollision(p2.attackBox, p1.position)) {
+        io.emit('playerHit', {
+          attackerId: id2,
+          targetId: id1
+        });
+      }
+    }
+  }
 }, 1000 / 60);
-
-function checkCollision(attackBox, position) {
-  return (
-    attackBox.position.x + attackBox.width >= position.x &&
-    attackBox.position.x <= position.x + 50 &&
-    attackBox.position.y + attackBox.height >= position.y &&
-    attackBox.position.y <= position.y + 150
-  );
-}
 
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+});
+
+// Обработка завершения работы
+process.on('SIGTERM', () => {
+  clearInterval(gameLoop);
+  server.close();
 });
