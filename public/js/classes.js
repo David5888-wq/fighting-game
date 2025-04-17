@@ -4,7 +4,8 @@ class Sprite {
         imageSrc,
         scale = 1,
         framesMax = 1,
-        offset = { x: 0, y: 0 }
+        offset = { x: 0, y: 0 },
+        animationSpeed = 100 // ⚡ Время в ms на кадр
     }) {
         this.position = position;
         this.image = new Image();
@@ -12,11 +13,14 @@ class Sprite {
         this.scale = scale;
         this.framesMax = framesMax;
         this.framesCurrent = 0;
-        this.framesElapsed = 0;
-        this.framesHold = 5;
         this.offset = offset;
         this.width = 50;
         this.height = 150;
+        
+        // ⚡ Параметры анимации
+        this.animationSpeed = animationSpeed;
+        this.lastFrameUpdate = Date.now();
+        this.lastUpdate = Date.now();
     }
 
     draw() {
@@ -36,18 +40,16 @@ class Sprite {
         );
     }
 
+    // ⚡ Анимация на основе времени
     animateFrames() {
-        this.framesElapsed++;
-        if (this.framesElapsed % this.framesHold === 0) {
-            if (this.framesCurrent < this.framesMax - 1) {
-                this.framesCurrent++;
-            } else {
-                this.framesCurrent = 0;
-            }
+        const now = Date.now();
+        if (now - this.lastFrameUpdate > this.animationSpeed) {
+            this.framesCurrent = (this.framesCurrent + 1) % this.framesMax;
+            this.lastFrameUpdate = now;
         }
     }
 
-    update() {
+    update(deltaTime) {
         this.draw();
         this.animateFrames();
     }
@@ -64,14 +66,16 @@ class Fighter extends Sprite {
         offset = { x: 0, y: 0 },
         sprites,
         attackBox = { offset: {}, width: undefined, height: undefined },
-        isEnemy = false
+        isEnemy = false,
+        animationSpeed = 100
     }) {
         super({
             position,
             imageSrc,
             scale,
             framesMax,
-            offset
+            offset,
+            animationSpeed
         });
 
         this.velocity = velocity;
@@ -91,51 +95,49 @@ class Fighter extends Sprite {
         this.sprites = sprites;
         this.dead = false;
         this.isEnemy = isEnemy;
-        this.flipX = isEnemy;
 
-        // Загрузка всех спрайтов
+        // ⚡ Предзагрузка всех анимаций
         for (const sprite in this.sprites) {
             this.sprites[sprite].image = new Image();
             this.sprites[sprite].image.src = this.sprites[sprite].imageSrc;
         }
     }
 
-    update() {
-        this.draw();
-        if (!this.dead) this.animateFrames();
+    update(deltaTime) {
+        super.update(deltaTime);
+        if (this.dead) return;
 
-        // Обновление позиции атакующего бокса
-        this.attackBox.position.x = this.position.x + (this.isEnemy ? -this.attackBox.offset.x : this.attackBox.offset.x);
-        this.attackBox.position.y = this.position.y + this.attackBox.offset.y;
+        // ⚡ Физика с deltaTime
+        const timeFactor = deltaTime / 16.67; // Нормализация для 60 FPS
+        this.position.x += this.velocity.x * timeFactor;
+        this.position.y += this.velocity.y * timeFactor;
 
-        // Обновление позиции
-        this.position.x += this.velocity.x;
-        this.position.y += this.velocity.y;
+        // Гравитация
+        this.velocity.y += gravity * timeFactor;
 
-        // Гравитация и ограничение по земле
-        if (this.position.y + this.height + this.velocity.y >= canvas.height - 96) {
+        // Ограничение по земле
+        if (this.position.y + this.height >= canvas.height - 96) {
             this.velocity.y = 0;
             this.position.y = 330;
-        } else {
-            this.velocity.y += gravity;
         }
+
+        // Обновление атак бокса
+        this.attackBox.position.x = this.position.x + 
+            (this.isEnemy ? -this.attackBox.offset.x : this.attackBox.offset.x);
+        this.attackBox.position.y = this.position.y + this.attackBox.offset.y;
     }
 
     attack() {
         if (this.dead) return;
-        
         this.switchSprite('attack1');
         this.isAttacking = true;
-        setTimeout(() => {
-            this.isAttacking = false;
-        }, 300);
     }
 
     takeHit() {
         if (this.dead) return;
         
-        this.switchSprite('takeHit');
         this.health -= 20;
+        this.switchSprite('takeHit');
 
         if (this.health <= 0) {
             this.switchSprite('death');
@@ -143,8 +145,8 @@ class Fighter extends Sprite {
         }
     }
 
+    // ⚡ Улучшенная смена анимаций
     switchSprite(sprite) {
-        // Если умерли, не переключаем спрайты
         if (this.image === this.sprites.death.image) {
             if (this.framesCurrent === this.sprites.death.framesMax - 1) {
                 this.dead = true;
@@ -152,68 +154,27 @@ class Fighter extends Sprite {
             return;
         }
 
-        // Если в середине анимации атаки, не переключаем
-        if (
-            this.image === this.sprites.attack1.image &&
-            this.framesCurrent < this.sprites.attack1.framesMax - 1
-        ) return;
-
-        // Если в середине анимации получения удара, не переключаем
-        if (
-            this.image === this.sprites.takeHit.image &&
-            this.framesCurrent < this.sprites.takeHit.framesMax - 1
-        ) return;
-
-        switch (sprite) {
-            case 'idle':
-                if (this.image !== this.sprites.idle.image) {
-                    this.image = this.sprites.idle.image;
-                    this.framesMax = this.sprites.idle.framesMax;
-                    this.framesCurrent = 0;
-                }
-                break;
-            case 'run':
-                if (this.image !== this.sprites.run.image) {
-                    this.image = this.sprites.run.image;
-                    this.framesMax = this.sprites.run.framesMax;
-                    this.framesCurrent = 0;
-                }
-                break;
-            case 'jump':
-                if (this.image !== this.sprites.jump.image) {
-                    this.image = this.sprites.jump.image;
-                    this.framesMax = this.sprites.jump.framesMax;
-                    this.framesCurrent = 0;
-                }
-                break;
-            case 'fall':
-                if (this.image !== this.sprites.fall.image) {
-                    this.image = this.sprites.fall.image;
-                    this.framesMax = this.sprites.fall.framesMax;
-                    this.framesCurrent = 0;
-                }
-                break;
-            case 'attack1':
-                if (this.image !== this.sprites.attack1.image) {
-                    this.image = this.sprites.attack1.image;
-                    this.framesMax = this.sprites.attack1.framesMax;
-                    this.framesCurrent = 0;
-                }
-                break;
-            case 'takeHit':
-                if (this.image !== this.sprites.takeHit.image) {
-                    this.image = this.sprites.takeHit.image;
-                    this.framesMax = this.sprites.takeHit.framesMax;
-                    this.framesCurrent = 0;
-                }
-                break;
-            case 'death':
-                if (this.image !== this.sprites.death.image) {
-                    this.image = this.sprites.death.image;
-                    this.framesMax = this.sprites.death.framesMax;
-                    this.framesCurrent = 0;
-                }
-                break;
+        // Приоритет анимаций
+        const priority = ['death', 'takeHit', 'attack1'];
+        if (priority.includes(sprite) && this.image !== this.sprites[sprite].image) {
+            this.overrideAnimation(sprite);
+            return;
         }
+
+        if (
+            (this.image === this.sprites.attack1.image && 
+             this.framesCurrent < this.sprites.attack1.framesMax - 1) ||
+            (this.image === this.sprites.takeHit.image && 
+             this.framesCurrent < this.sprites.takeHit.framesMax - 1)
+        ) return;
+
+        this.overrideAnimation(sprite);
+    }
+
+    overrideAnimation(sprite) {
+        this.image = this.sprites[sprite].image;
+        this.framesMax = this.sprites[sprite].framesMax;
+        this.framesCurrent = 0;
+        this.animationSpeed = this.sprites[sprite].animationSpeed || 100;
     }
 }
