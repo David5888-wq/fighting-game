@@ -22,26 +22,14 @@ function determineWinner({ player, enemy, timerId }) {
         displayText.innerHTML = 'Игрок 2 Победил';
     }
     
-    // Автоматический рестарт через 5 секунд
     setTimeout(() => {
         window.location.reload();
     }, 5000);
 }
 
-// Таймер игры
-let timer = 60;
-let timerId;
-
-function decreaseTimer() {
-    if (timer > 0) {
-        timerId = setTimeout(decreaseTimer, 1000);
-        timer--;
-        document.querySelector('#timer').innerHTML = timer;
-    }
-
-    if (timer === 0) {
-        determineWinner({ player, enemy, timerId });
-    }
+// ⚡ Обновление таймера (новая функция)
+function updateTimer(time) {
+    document.querySelector('#timer').innerHTML = Math.floor(time);
 }
 
 // Вспомогательная функция для загрузки изображений
