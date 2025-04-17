@@ -42,15 +42,29 @@ const PORT = process.env.PORT || 3000;
 
 // Состояние сервера
 const serverState = {
-  players: new Map(),    // Все подключенные игроки
+  players: new Map(),     // Все подключенные игроки
   activeGames: new Map(), // Активные игры
+  characters: [           // ⚡ Добавлен список персонажей
+    {
+      name: 'samurai',
+      imageSrc: './img/samuraiMack/Idle.png',
+      offset: { x: 215, y: 157 },
+      attackBox: { offset: { x: 100, y: 50 }, width: 160, height: 50 }
+    },
+    {
+      name: 'kenji',
+      imageSrc: './img/kenji/Idle.png',
+      offset: { x: 215, y: 167 },
+      attackBox: { offset: { x: -170, y: 50 }, width: 170, height: 50 }
+    }
+  ],
   settings: {
     gravity: 0.5,
     floorLevel: 330,
     playerSpeed: 5,
     jumpForce: -10,
     attackDamage: 20,
-    gameDuration: 60
+    gameDuration: 60      // ⚡ Продолжительность игры в секундах
   }
 };
 
@@ -58,16 +72,17 @@ const serverState = {
 const generateGameId = () => Math.random().toString(36).substr(2, 12);
 
 // Инициализация игрока
-const initPlayer = (socketId, username, isPlayer1) => ({
+const initPlayer = (socketId, username, isPlayer1, character) => ({ // ⚡ Добавлен параметр character
   id: socketId,
   username,
   position: { x: isPlayer1 ? 100 : 400, y: 0 },
   velocity: { x: 0, y: 0 },
   health: 100,
   isAttacking: false,
-  attackBox: { x: 0, y: 0, width: 100, height: 50 },
+  attackBox: character.attackBox, // ⚡ Используем атаку из характеристик персонажа
   facingRight: isPlayer1,
-  lastKey: ''
+  lastKey: '',
+  character               // ⚡ Сохраняем данные персонажа
 });
 
 // Проверка столкновений
@@ -82,7 +97,7 @@ const checkCollision = (attacker, target) => (
 io.on('connection', (socket) => {
   console.log(`Новое подключение: ${socket.id}`);
 
-  // Обработка регистрации игрока
+  // Регистрация игрока
   socket.on('registerPlayer', (username) => {
     if (!username || username.trim() === '') {
       username = `Player${Math.floor(Math.random() * 1000)}`;
@@ -101,7 +116,6 @@ io.on('connection', (socket) => {
         .filter(p => p.id !== socket.id && p.status === 'waiting')
     });
 
-    // Уведомляем других игроков о новом подключении
     socket.broadcast.emit('playerJoined', {
       id: socket.id,
       username,
@@ -109,7 +123,7 @@ io.on('connection', (socket) => {
     });
   });
 
-  // Обработка вызова на бой
+  // Вызов на бой
   socket.on('challengePlayer', (targetId) => {
     const challenger = serverState.players.get(socket.id);
     const target = serverState.players.get(targetId);
@@ -119,26 +133,27 @@ io.on('connection', (socket) => {
       return;
     }
 
-    // Создаем игру
+    // ⚡ Случайный выбор персонажей
+    const availableChars = [...serverState.characters];
+    const char1 = availableChars.splice(Math.floor(Math.random() * availableChars.length), 1)[0];
+    const char2 = availableChars[0];
+
     const gameId = generateGameId();
     const newGame = {
       players: {
-        [socket.id]: initPlayer(socket.id, challenger.username, true),
-        [targetId]: initPlayer(targetId, target.username, false)
+        [socket.id]: initPlayer(socket.id, challenger.username, true, char1),
+        [targetId]: initPlayer(targetId, target.username, false, char2)
       },
       startTime: Date.now(),
       intervalId: null
     };
 
-    // Обновляем статусы игроков
     challenger.status = 'inGame';
     target.status = 'inGame';
     serverState.activeGames.set(gameId, newGame);
 
-    // Настройка игрового цикла
     newGame.intervalId = setInterval(() => gameLoop(gameId), 1000/60);
 
-    // Уведомление игроков
     io.to(socket.id).socketsJoin(gameId);
     io.to(targetId).socketsJoin(gameId);
 
@@ -147,20 +162,11 @@ io.on('connection', (socket) => {
       players: newGame.players
     });
 
-    // Уведомляем всех об изменении статусов
-    io.emit('playerStatusChanged', {
-      id: socket.id,
-      status: 'inGame'
-    });
-    io.emit('playerStatusChanged', {
-      id: targetId,
-      status: 'inGame'
-    });
-
-    console.log(`Создана игра ${gameId} между ${socket.id} и ${targetId}`);
+    io.emit('playerStatusChanged', { id: socket.id, status: 'inGame' });
+    io.emit('playerStatusChanged', { id: targetId, status: 'inGame' });
   });
 
-  // Обработка движения игрока
+  // Обработка движения
   socket.on('movement', (data) => {
     try {
       const gameEntry = Array.from(serverState.activeGames.entries())
@@ -171,7 +177,6 @@ io.on('connection', (socket) => {
       const [gameId, game] = gameEntry;
       const player = game.players[socket.id];
 
-      // Обновление состояния игрока
       player.position = data.position;
       player.facingRight = data.facingRight;
       player.isAttacking = data.isAttacking;
@@ -185,17 +190,16 @@ io.on('connection', (socket) => {
         };
       }
 
-      // Отправка обновлений
       io.to(gameId).emit('playerUpdate', {
         playerId: socket.id,
         ...player
       });
     } catch (error) {
-      console.error(`Ошибка в обработчике движения: ${error}`);
+      console.error(`Ошибка обработки движения: ${error}`);
     }
   });
 
-  // Обработка ударов
+  // Обработка атаки
   socket.on('attack', () => {
     try {
       const gameEntry = Array.from(serverState.activeGames.entries())
@@ -222,11 +226,11 @@ io.on('connection', (socket) => {
         }
       }
     } catch (error) {
-      console.error(`Ошибка в обработчике атаки: ${error}`);
+      console.error(`Ошибка обработки атаки: ${error}`);
     }
   });
 
-  // Обработка отключения
+  // Отключение
   socket.on('disconnect', () => {
     console.log(`Отключение: ${socket.id}`);
     const player = serverState.players.get(socket.id);
@@ -236,12 +240,11 @@ io.on('connection', (socket) => {
       io.emit('playerLeft', socket.id);
     }
 
-    // Поиск активной игры
     const gameEntry = Array.from(serverState.activeGames.entries())
       .find(([_, game]) => game.players[socket.id]);
 
     if (gameEntry) {
-      const [gameId, game] = gameEntry;
+      const [gameId] = gameEntry;
       endGame(gameId, 'disconnect');
     }
   });
@@ -253,14 +256,17 @@ const gameLoop = (gameId) => {
     const game = serverState.activeGames.get(gameId);
     if (!game) return;
 
-    // Проверка времени
+    // Расчет времени
     const elapsed = (Date.now() - game.startTime) / 1000;
-    if (elapsed >= serverState.settings.gameDuration) {
+    const timeLeft = Math.max(0, serverState.settings.gameDuration - elapsed);
+
+    // Проверка таймера
+    if (timeLeft <= 0) {
       endGame(gameId, 'timeout');
       return;
     }
 
-    // Обновление физики
+    // Физика
     Object.values(game.players).forEach(player => {
       player.velocity.y += serverState.settings.gravity;
       player.position.x += player.velocity.x * serverState.settings.playerSpeed;
@@ -272,13 +278,13 @@ const gameLoop = (gameId) => {
       }
     });
 
-    // Синхронизация состояния
+    // Отправка состояния
     io.to(gameId).emit('gameStateUpdate', {
       players: game.players,
-      timeLeft: Math.max(0, serverState.settings.gameDuration - elapsed)
+      timeLeft: timeLeft.toFixed(1) // ⚡ Точное время с одним знаком после запятой
     });
   } catch (error) {
-    console.error(`Ошибка в игровом цикле: ${error}`);
+    console.error(`Ошибка игрового цикла: ${error}`);
     endGame(gameId, 'server_error');
   }
 };
@@ -291,13 +297,10 @@ const endGame = (gameId, reason) => {
 
     clearInterval(game.intervalId);
     
-    // Определяем победителя
     let winnerId = null;
     if (typeof reason === 'string') {
       const players = Object.keys(game.players);
-      if (players.length === 2) {
-        winnerId = players.find(id => id !== reason);
-      }
+      if (players.length === 2) winnerId = players.find(id => id !== reason);
     } else {
       winnerId = reason;
     }
@@ -308,29 +311,20 @@ const endGame = (gameId, reason) => {
       winner: winnerId
     });
 
-    // Обновляем статусы игроков
     Object.keys(game.players).forEach(playerId => {
       const player = serverState.players.get(playerId);
       if (player) {
         player.status = 'waiting';
-        io.emit('playerStatusChanged', {
-          id: playerId,
-          status: 'waiting'
-        });
+        io.emit('playerStatusChanged', { id: playerId, status: 'waiting' });
       }
     });
 
     serverState.activeGames.delete(gameId);
     io.in(gameId).socketsLeave(gameId);
   } catch (error) {
-    console.error(`Ошибка при завершении игры: ${error}`);
+    console.error(`Ошибка завершения игры: ${error}`);
   }
 };
-
-// Обработка ошибок сервера
-server.on('error', (error) => {
-  console.error('Server error:', error);
-});
 
 server.listen(PORT, () => {
   console.log(`Сервер запущен на порту ${PORT}`);
