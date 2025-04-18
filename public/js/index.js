@@ -1,3 +1,6 @@
+'use strict';
+
+// DOM элементы
 const canvas = document.querySelector('canvas');
 const c = canvas.getContext('2d');
 const lobbyContainer = document.getElementById('lobby-container');
@@ -5,20 +8,23 @@ const gameContainer = document.querySelector('.game-container');
 const usernameInput = document.getElementById('username-input');
 const registerBtn = document.getElementById('register-btn');
 const playersContainer = document.getElementById('players-container');
+const playerHealthElement = document.getElementById('playerHealth');
+const enemyHealthElement = document.getElementById('enemyHealth');
+const timerElement = document.getElementById('timer');
+const displayTextElement = document.getElementById('displayText');
 
-// Подключение к серверу с обработкой ошибок
-const socket = io({
-  reconnectionAttempts: 5,
-  reconnectionDelay: 1000,
-  timeout: 20000
-});
-
-let playerId;
-let playerUsername;
-let enemyId;
+// Игровые переменные
+let playerId = null;
+let playerUsername = '';
+let enemyId = null;
 let gameStarted = false;
+let gameId = null;
 const gravity = 0.3;
 let player, enemy, background, shop;
+let lastTimestamp = 0;
+let connectionAttempts = 0;
+const MAX_CONNECTION_ATTEMPTS = 5;
+const RECONNECT_DELAY = 3000;
 
 // Состояние клавиш управления
 const keys = {
@@ -28,26 +34,63 @@ const keys = {
   ' ': { pressed: false }
 };
 
+// Подключение к серверу с обработкой ошибок
+const socket = io({
+  reconnectionAttempts: MAX_CONNECTION_ATTEMPTS,
+  reconnectionDelay: RECONNECT_DELAY,
+  timeout: 20000,
+  transports: ['websocket']
+});
+
 // Обработчики соединения
 socket.on('connect', () => {
   console.log('Connected to server with ID:', socket.id);
+  connectionAttempts = 0;
+  hideError();
 });
 
-socket.on('disconnect', () => {
-  console.log('Disconnected from server');
-  showError('Connection lost. Reconnecting...');
+socket.on('disconnect', (reason) => {
+  console.log('Disconnected from server:', reason);
+  
+  if (reason === 'io server disconnect') {
+    showError('You were disconnected by the server. Please refresh the page.');
+  } else if (connectionAttempts < MAX_CONNECTION_ATTEMPTS) {
+    showError('Connection lost. Reconnecting...');
+  }
 });
 
 socket.on('connect_error', (err) => {
+  connectionAttempts++;
   console.error('Connection error:', err.message);
-  showError(`Connection failed: ${err.message}`);
+  
+  if (connectionAttempts >= MAX_CONNECTION_ATTEMPTS) {
+    showError('Failed to connect to server. Please check your connection and refresh the page.');
+    registerBtn.disabled = false;
+    registerBtn.textContent = 'Join Game';
+  } else {
+    showError(`Connection failed (attempt ${connectionAttempts}/${MAX_CONNECTION_ATTEMPTS}). Retrying...`);
+  }
+});
+
+socket.on('reconnect_failed', () => {
+  showError('Could not reconnect to server. Please refresh the page.');
+  registerBtn.disabled = false;
+  registerBtn.textContent = 'Join Game';
 });
 
 // Регистрация игрока
-registerBtn.addEventListener('click', () => {
+registerBtn.addEventListener('click', registerPlayer);
+
+function registerPlayer() {
   const username = usernameInput.value.trim();
+  
   if (!username) {
     showError('Please enter a username');
+    return;
+  }
+
+  if (username.length < 2 || username.length > 20) {
+    showError('Username must be between 2 and 20 characters');
     return;
   }
 
@@ -62,7 +105,7 @@ registerBtn.addEventListener('click', () => {
       return;
     }
   });
-});
+}
 
 // Успешная регистрация
 socket.on('registrationSuccess', (data) => {
@@ -80,7 +123,7 @@ socket.on('registrationSuccess', (data) => {
 function updatePlayersList(players) {
   playersContainer.innerHTML = '<h2>Available Players:</h2>';
   
-  if (players.length === 0) {
+  if (!players || players.length === 0) {
     playersContainer.innerHTML += '<p>No players available</p>';
     return;
   }
@@ -91,13 +134,13 @@ function updatePlayersList(players) {
 }
 
 function addPlayerToList(playerData) {
-  if (playerData.id === playerId) return;
+  if (!playerData || playerData.id === playerId) return;
   
   const playerElement = document.createElement('div');
   playerElement.className = 'player-item';
   playerElement.dataset.id = playerData.id;
   playerElement.innerHTML = `
-    <span>${playerData.username}</span>
+    <span>${playerData.username || 'Unknown'}</span>
     <span class="player-status ${playerData.status === 'inGame' ? 'in-game' : ''}">
       ${playerData.status === 'waiting' ? 'Waiting' : 'In Game'}
     </span>
@@ -105,30 +148,87 @@ function addPlayerToList(playerData) {
   
   if (playerData.status === 'waiting') {
     playerElement.addEventListener('click', () => {
-      socket.emit('challengePlayer', playerData.id, (response) => {
-        if (response.error) {
-          showError(response.error);
-        }
-      });
+      if (playerData.id !== playerId) {
+        challengePlayer(playerData.id);
+      }
     });
   }
   
   playersContainer.appendChild(playerElement);
 }
 
+function challengePlayer(targetId) {
+  if (!targetId || typeof targetId !== 'string') return;
+  
+  socket.emit('challengePlayer', targetId, (response) => {
+    if (response.error) {
+      showError(response.error);
+    }
+  });
+}
+
 // Обработчики игровых событий
 socket.on('gameStart', (gameData) => {
+  if (!gameData || !gameData.players || !gameData.players[playerId]) {
+    showError('Invalid game data received');
+    return;
+  }
+
   lobbyContainer.style.display = 'none';
   gameContainer.style.display = 'inline-block';
+  gameId = gameData.gameId;
   
   initGame(gameData);
   
   if (!gameStarted) {
-    animate();
+    lastTimestamp = performance.now();
+    requestAnimationFrame(animate);
     gameStarted = true;
   }
 });
 
+socket.on('enemyUpdate', (data) => {
+  if (!enemy || !data) return;
+  
+  enemy.position = data.position || enemy.position;
+  enemy.velocity = data.velocity || enemy.velocity;
+  enemy.isAttacking = data.isAttacking || false;
+  enemy.facingRight = data.facingRight !== undefined ? data.facingRight : enemy.facingRight;
+  
+  if (data.isAttacking) {
+    checkAttack(enemy, player);
+  }
+});
+
+socket.on('playerHit', (data) => {
+  if (!data || !player || !enemy) return;
+  
+  if (data.targetId === playerId) {
+    player.takeHit();
+    updateHealthBars();
+  }
+});
+
+socket.on('gameOver', (data) => {
+  if (!data) return;
+  
+  const winner = data.winner === playerId ? 'You' : 
+                data.winner === enemyId ? enemyId : 'No one';
+  
+  displayTextElement.textContent = data.winner === playerId ? 
+    'You Win!' : data.winner === enemyId ? 
+    'You Lose!' : 'Draw!';
+  
+  displayTextElement.style.display = 'flex';
+  
+  setTimeout(() => {
+    window.location.reload();
+  }, 5000);
+});
+
+socket.on('playerListUpdate', updatePlayersList);
+
+// Инициализация игры
 function initGame(gameData) {
   // Инициализация фона
   background = new Sprite({
@@ -188,22 +288,31 @@ function initGame(gameData) {
   });
   enemy.id = enemyId;
   enemy.health = 100;
+
+  // Инициализация UI
+  updateHealthBars();
+  timerElement.textContent = gameData.settings.gameDuration || 60;
 }
 
 // Игровой цикл
-function animate() {
+function animate(timestamp) {
+  if (!gameStarted) return;
+  
+  const deltaTime = timestamp - lastTimestamp;
+  lastTimestamp = timestamp;
+  
   window.requestAnimationFrame(animate);
   c.fillStyle = 'black';
   c.fillRect(0, 0, canvas.width, canvas.height);
   
-  background.update();
-  shop.update();
+  background.update(deltaTime);
+  shop.update(deltaTime);
   
   c.fillStyle = 'rgba(255, 255, 255, 0.15)';
   c.fillRect(0, 0, canvas.width, canvas.height);
   
   if (player) {
-    player.update();
+    player.update(deltaTime);
     
     // Отправка данных о движении
     socket.emit('playerUpdate', {
@@ -212,41 +321,71 @@ function animate() {
       isAttacking: player.isAttacking,
       facingRight: player.facingRight
     });
+    
+    // Проверка атаки игрока
+    if (player.isAttacking) {
+      checkAttack(player, enemy);
+    }
   }
   
   if (enemy) {
-    enemy.update();
+    enemy.update(deltaTime);
   }
 
   // Локальное управление
-  if (player) {
-    player.velocity.x = 0;
-    
-    if (keys.a.pressed && player.lastKey === 'a') {
-      player.velocity.x = -5;
-      player.switchSprite('run');
-      player.facingRight = false;
-    } else if (keys.d.pressed && player.lastKey === 'd') {
-      player.velocity.x = 5;
-      player.switchSprite('run');
-      player.facingRight = true;
-    } else {
-      player.switchSprite('idle');
-    }
+  handlePlayerMovement();
+}
 
-    if (player.velocity.y < 0) {
-      player.switchSprite('jump');
-    } else if (player.velocity.y > 0) {
-      player.switchSprite('fall');
-    }
+function handlePlayerMovement() {
+  if (!player || player.dead) return;
+  
+  player.velocity.x = 0;
+  
+  if (keys.a.pressed && player.lastKey === 'a') {
+    player.velocity.x = -5;
+    player.switchSprite('run');
+    player.facingRight = false;
+  } else if (keys.d.pressed && player.lastKey === 'd') {
+    player.velocity.x = 5;
+    player.switchSprite('run');
+    player.facingRight = true;
+  } else {
+    player.switchSprite('idle');
   }
+
+  if (player.velocity.y < 0) {
+    player.switchSprite('jump');
+  } else if (player.velocity.y > 0) {
+    player.switchSprite('fall');
+  }
+}
+
+function checkAttack(attacker, target) {
+  if (!attacker || !target || target.dead) return;
+  
+  if (
+    attacker.attackBox.position.x + attacker.attackBox.width >= target.position.x &&
+    attacker.attackBox.position.x <= target.position.x + target.width &&
+    attacker.attackBox.position.y + attacker.attackBox.height >= target.position.y &&
+    attacker.attackBox.position.y <= target.position.y + target.height
+  ) {
+    socket.emit('attack');
+    attacker.isAttacking = false;
+  }
+}
+
+function updateHealthBars() {
+  if (!player || !enemy) return;
+  
+  playerHealthElement.style.width = `${player.health}%`;
+  enemyHealthElement.style.width = `${enemy.health}%`;
 }
 
 // Обработчики клавиш
 window.addEventListener('keydown', (event) => {
   if (!player || player.dead) return;
 
-  switch (event.key) {
+  switch (event.key.toLowerCase()) {
     case 'a':
       keys.a.pressed = true;
       player.lastKey = 'a';
@@ -256,19 +395,21 @@ window.addEventListener('keydown', (event) => {
       player.lastKey = 'd';
       break;
     case 'w':
-      if (player.position.y === 330) {
+      if (player.position.y + player.height >= canvas.height - 96) {
         player.velocity.y = -15;
       }
       break;
     case ' ':
-      player.attack();
-      player.isAttacking = true;
+      if (!player.isAttacking) {
+        player.attack();
+        socket.emit('attack');
+      }
       break;
   }
 });
 
 window.addEventListener('keyup', (event) => {
-  switch (event.key) {
+  switch (event.key.toLowerCase()) {
     case 'a':
       keys.a.pressed = false;
       break;
@@ -280,15 +421,32 @@ window.addEventListener('keyup', (event) => {
 
 // Вспомогательные функции
 function showError(message) {
-  const errorElement = document.createElement('div');
-  errorElement.className = 'error-message';
-  errorElement.textContent = message;
-  lobbyContainer.appendChild(errorElement);
+  let errorElement = document.querySelector('.error-message');
   
-  setTimeout(() => {
-    errorElement.remove();
-  }, 3000);
+  if (!errorElement) {
+    errorElement = document.createElement('div');
+    errorElement.className = 'error-message';
+    lobbyContainer.appendChild(errorElement);
+  }
+  
+  errorElement.textContent = message;
+  errorElement.style.display = 'block';
+}
+
+function hideError() {
+  const errorElement = document.querySelector('.error-message');
+  if (errorElement) {
+    errorElement.style.display = 'none';
+  }
 }
 
 // Инициализация
 console.log('Game client initialized');
+
+// Обработчик изменения размера окна
+window.addEventListener('resize', () => {
+  if (gameStarted) {
+    canvas.width = Math.min(1024, window.innerWidth - 40);
+    canvas.height = Math.min(576, window.innerHeight - 200);
+  }
+});
