@@ -1,3 +1,4 @@
+'use strict';
 require('dotenv').config();
 const express = require('express');
 const http = require('http');
@@ -8,17 +9,19 @@ const cors = require('cors');
 const app = express();
 const server = http.createServer(app);
 
-// Настройки CORS
+// Настройки CORS с учетом среды выполнения
 const io = socketIo(server, {
   cors: {
     origin: process.env.NODE_ENV === 'production' 
       ? ['https://myfighting-game.ru', 'https://www.myfighting-game.ru']
-      : ['http://localhost:3000'],
+      : ['http://localhost:3000', 'http://127.0.0.1:3000'],
     methods: ['GET', 'POST'],
     credentials: true
   },
   pingTimeout: 60000,
-  pingInterval: 25000
+  pingInterval: 25000,
+  transports: ['websocket', 'polling'],
+  serveClient: false
 });
 
 // Конфигурация сервера
@@ -33,13 +36,13 @@ const serverState = {
   characters: [
     {
       name: 'samurai',
-      imageSrc: '/img/samuraiMack/Idle.png',
+      imageSrc: path.join('/img/samuraiMack/Idle.png'),
       offset: { x: 215, y: 157 },
       attackBox: { offset: { x: 100, y: 50 }, width: 160, height: 50 }
     },
     {
       name: 'kenji',
-      imageSrc: '/img/kenji/Idle.png',
+      imageSrc: path.join('/img/kenji/Idle.png'),
       offset: { x: 215, y: 167 },
       attackBox: { offset: { x: -170, y: 50 }, width: 170, height: 50 }
     }
@@ -54,15 +57,25 @@ const serverState = {
 };
 
 // Middleware
-app.use(cors());
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(cors({
+  origin: process.env.NODE_ENV === 'production' 
+    ? ['https://myfighting-game.ru', 'https://www.myfighting-game.ru']
+    : '*'
+}));
+
+app.use(express.static(path.join(__dirname, 'public'), {
+  setHeaders: (res) => {
+    res.set('Cache-Control', 'public, max-age=3600');
+  }
+}));
 
 // API для проверки состояния
 app.get('/api/status', (req, res) => {
-  res.json({
+  res.status(200).json({
+    status: 'ok',
     players: serverState.players.size,
     activeGames: serverState.activeGames.size,
-    status: 'online'
+    uptime: process.uptime()
   });
 });
 
@@ -83,7 +96,8 @@ const initPlayer = (socketId, username, isPlayer1) => {
     character,
     lastKey: '',
     facingRight: isPlayer1,
-    status: 'waiting'
+    status: 'waiting',
+    lastActive: Date.now()
   };
 };
 
@@ -97,34 +111,61 @@ const checkCollision = (attacker, target) => {
   );
 };
 
+// Проверка активности игрока
+const checkPlayerActivity = () => {
+  const now = Date.now();
+  serverState.players.forEach((player, id) => {
+    if (now - player.lastActive > 30000) { // 30 секунд неактивности
+      const socket = io.sockets.sockets.get(id);
+      if (socket) {
+        socket.disconnect();
+      }
+    }
+  });
+};
+
 // Обработчики Socket.IO
 io.on('connection', (socket) => {
   console.log(`New connection: ${socket.id}`);
   
   // Защита от перегрузки
   if (serverState.players.size >= MAX_PLAYERS) {
-    socket.emit('error', 'Server is full. Try again later.');
+    socket.emit('error', { message: 'Server is full. Try again later.', code: 503 });
     socket.disconnect();
     return;
   }
 
+  // Таймер проверки активности
+  const activityCheck = setInterval(() => {
+    const player = serverState.players.get(socket.id);
+    if (player && Date.now() - player.lastActive > 30000) {
+      socket.disconnect();
+    }
+  }, 10000);
+
   // Регистрация игрока
   socket.on('registerPlayer', (username, callback) => {
     try {
-      if (!username || username.trim().length < 2) {
-        throw new Error('Username must be at least 2 characters');
+      if (!username || typeof username !== 'string') {
+        throw new Error('Invalid username');
       }
 
-      if (Array.from(serverState.players.values()).some(p => p.username === username.trim())) {
+      const trimmedUsername = username.trim();
+      if (trimmedUsername.length < 2 || trimmedUsername.length > 20) {
+        throw new Error('Username must be between 2 and 20 characters');
+      }
+
+      if (Array.from(serverState.players.values()).some(p => p.username === trimmedUsername)) {
         throw new Error('Username already taken');
       }
 
-      const player = initPlayer(socket.id, username, true);
+      const player = initPlayer(socket.id, trimmedUsername, true);
       serverState.players.set(socket.id, player);
 
       callback({
         success: true,
         playerId: socket.id,
+        username: trimmedUsername,
         characters: serverState.characters
       });
 
@@ -134,13 +175,22 @@ io.on('connection', (socket) => {
       });
 
     } catch (err) {
-      callback({ success: false, error: err.message });
+      console.error('Registration error:', err);
+      callback({ 
+        success: false, 
+        error: err.message,
+        code: 400
+      });
     }
   });
 
   // Вызов на бой
   socket.on('challengePlayer', (targetId, callback) => {
     try {
+      if (!targetId || typeof targetId !== 'string') {
+        throw new Error('Invalid player ID');
+      }
+
       const challenger = serverState.players.get(socket.id);
       const target = serverState.players.get(targetId);
 
@@ -153,11 +203,13 @@ io.on('connection', (socket) => {
         id: gameId,
         players: {
           [socket.id]: { ...challenger, status: 'inGame' },
-          [targetId]: { ...target, status: 'inGame' }
+          [targetId]: { ...target, status: 'inGame', position: { x: 400, y: 0 } }
         },
         startTime: Date.now(),
-        timer: setInterval(() => updateGameState(gameId), 1000/60)
+        timer: null
       };
+
+      game.timer = setInterval(() => updateGameState(gameId), 1000/60);
 
       serverState.activeGames.set(gameId, game);
       serverState.players.get(socket.id).status = 'inGame';
@@ -175,78 +227,66 @@ io.on('connection', (socket) => {
       callback({ success: true });
 
     } catch (err) {
-      callback({ success: false, error: err.message });
+      console.error('Challenge error:', err);
+      callback({ 
+        success: false, 
+        error: err.message,
+        code: 400
+      });
     }
   });
 
   // Обновление состояния игрока
   socket.on('playerUpdate', (data) => {
-    const game = findPlayerGame(socket.id);
-    if (!game) return;
+    try {
+      const player = serverState.players.get(socket.id);
+      if (!player) return;
 
-    const player = game.players[socket.id];
-    if (!player) return;
+      player.lastActive = Date.now();
 
-    Object.assign(player, {
-      position: data.position,
-      velocity: data.velocity,
-      isAttacking: data.isAttacking,
-      facingRight: data.facingRight
-    });
+      const game = findPlayerGame(socket.id);
+      if (!game) return;
 
-    if (data.isAttacking) {
-      player.attackBox = {
-        x: player.position.x + (player.facingRight ? 50 : -100),
-        y: player.position.y + 30,
-        width: 100,
-        height: 50
-      };
-    }
-
-    socket.to(game.id).emit('enemyUpdate', {
-      playerId: socket.id,
-      ...player
-    });
-  });
-
-  // Обработка атаки
-  socket.on('attack', () => {
-    const game = findPlayerGame(socket.id);
-    if (!game) return;
-
-    const attacker = game.players[socket.id];
-    const opponentId = Object.keys(game.players).find(id => id !== socket.id);
-    const opponent = game.players[opponentId];
-
-    if (checkCollision(attacker, opponent)) {
-      opponent.health = Math.max(0, opponent.health - serverState.settings.attackDamage);
-
-      io.to(game.id).emit('playerHit', {
-        targetId: opponentId,
-        health: opponent.health,
-        attackerId: socket.id
+      Object.assign(player, {
+        position: data.position || player.position,
+        velocity: data.velocity || player.velocity,
+        isAttacking: data.isAttacking || false,
+        facingRight: data.facingRight !== undefined ? data.facingRight : player.facingRight
       });
 
-      if (opponent.health <= 0) {
-        endGame(game.id, socket.id);
+      if (data.isAttacking) {
+        player.attackBox = {
+          x: player.position.x + (player.facingRight ? 50 : -100),
+          y: player.position.y + 30,
+          width: 100,
+          height: 50
+        };
       }
+
+      socket.to(game.id).emit('enemyUpdate', {
+        playerId: socket.id,
+        ...player
+      });
+    } catch (err) {
+      console.error('Player update error:', err);
     }
   });
 
-  // Отключение игрока
+  // Обработка отключения
   socket.on('disconnect', () => {
     console.log(`Disconnected: ${socket.id}`);
+    clearInterval(activityCheck);
+
     const game = findPlayerGame(socket.id);
-    
     if (game) {
       endGame(game.id, 'disconnect');
-    } else {
-      serverState.players.delete(socket.id);
-      io.emit('playerListUpdate', {
-        players: Array.from(serverState.players.values())
-          .filter(p => p.status === 'waiting')
-      });
     }
+
+    serverState.players.delete(socket.id);
+    io.emit('playerListUpdate', {
+      players: Array.from(serverState.players.values())
+        .filter(p => p.status === 'waiting')
+    });
   });
 });
 
@@ -261,83 +301,99 @@ function findPlayerGame(playerId) {
 }
 
 function updateGameState(gameId) {
-  const game = serverState.activeGames.get(gameId);
-  if (!game) return;
+  try {
+    const game = serverState.activeGames.get(gameId);
+    if (!game) return;
 
-  // Проверка времени
-  const elapsed = (Date.now() - game.startTime) / 1000;
-  if (elapsed >= GAME_DURATION) {
-    endGame(gameId, 'timeout');
-    return;
-  }
-
-  // Обновление физики
-  Object.values(game.players).forEach(player => {
-    player.velocity.y += serverState.settings.gravity;
-    player.position.x += player.velocity.x * serverState.settings.playerSpeed;
-    player.position.y += player.velocity.y;
-
-    if (player.position.y > serverState.settings.floorLevel) {
-      player.position.y = serverState.settings.floorLevel;
-      player.velocity.y = 0;
+    // Проверка времени
+    const elapsed = (Date.now() - game.startTime) / 1000;
+    if (elapsed >= GAME_DURATION) {
+      endGame(gameId, 'timeout');
+      return;
     }
-  });
 
-  // Синхронизация состояния
-  io.to(gameId).emit('gameStateUpdate', {
-    players: game.players,
-    timeLeft: Math.floor(GAME_DURATION - elapsed)
-  });
+    // Обновление физики
+    Object.values(game.players).forEach(player => {
+      if (!player) return;
+
+      player.velocity.y += serverState.settings.gravity;
+      player.position.x += player.velocity.x * serverState.settings.playerSpeed;
+      player.position.y += player.velocity.y;
+
+      if (player.position.y > serverState.settings.floorLevel) {
+        player.position.y = serverState.settings.floorLevel;
+        player.velocity.y = 0;
+      }
+    });
+
+    // Синхронизация состояния
+    io.to(gameId).emit('gameStateUpdate', {
+      players: game.players,
+      timeLeft: Math.floor(GAME_DURATION - elapsed)
+    });
+  } catch (err) {
+    console.error('Game state update error:', err);
+  }
 }
 
 function endGame(gameId, reason) {
-  const game = serverState.activeGames.get(gameId);
-  if (!game) return;
+  try {
+    const game = serverState.activeGames.get(gameId);
+    if (!game) return;
 
-  clearInterval(game.timer);
-  
-  let winnerId = null;
-  const players = Object.keys(game.players);
-
-  if (typeof reason === 'string') {
-    if (reason === 'timeout') {
-      // Побеждает игрок с большим здоровьем
-      const [p1, p2] = players;
-      winnerId = game.players[p1].health > game.players[p2].health ? p1 : p2;
+    if (game.timer) {
+      clearInterval(game.timer);
     }
-  } else {
-    winnerId = reason;
+    
+    let winnerId = null;
+    const players = Object.keys(game.players);
+
+    if (typeof reason === 'string') {
+      if (reason === 'timeout') {
+        const [p1, p2] = players;
+        winnerId = game.players[p1].health > game.players[p2].health ? p1 : p2;
+      } else if (reason !== 'disconnect') {
+        winnerId = players.find(id => id !== reason);
+      }
+    }
+
+    // Обновление статусов
+    players.forEach(playerId => {
+      const player = serverState.players.get(playerId);
+      if (player) {
+        player.status = 'waiting';
+        player.health = 100;
+        player.position = { x: playerId === players[0] ? 100 : 400, y: 0 };
+        player.velocity = { x: 0, y: 0 };
+      }
+    });
+
+    io.to(gameId).emit('gameOver', {
+      winner: winnerId,
+      reason: reason === 'timeout' ? 'Time is up!' : 
+             reason === 'disconnect' ? 'Player disconnected' : 'Game finished'
+    });
+
+    serverState.activeGames.delete(gameId);
+    io.in(gameId).socketsLeave(gameId);
+
+    // Обновление списка игроков
+    io.emit('playerListUpdate', {
+      players: Array.from(serverState.players.values())
+        .filter(p => p.status === 'waiting')
+    });
+  } catch (err) {
+    console.error('Game end error:', err);
   }
-
-  // Обновление статусов
-  players.forEach(playerId => {
-    const player = serverState.players.get(playerId);
-    if (player) {
-      player.status = 'waiting';
-      player.health = 100;
-    }
-  });
-
-  io.to(gameId).emit('gameOver', {
-    winner: winnerId,
-    reason: reason === 'timeout' ? 'Time is up!' : 
-           reason === 'disconnect' ? 'Player disconnected' : 'Game finished'
-  });
-
-  serverState.activeGames.delete(gameId);
-  io.in(gameId).socketsLeave(gameId);
-
-  // Обновление списка игроков
-  io.emit('playerListUpdate', {
-    players: Array.from(serverState.players.values())
-      .filter(p => p.status === 'waiting')
-  });
 }
 
 // Запуск сервера
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  
+  // Запуск проверки активности
+  setInterval(checkPlayerActivity, 30000);
 });
 
 // Обработка ошибок
@@ -348,3 +404,32 @@ process.on('unhandledRejection', (err) => {
 process.on('uncaughtException', (err) => {
   console.error('Uncaught exception:', err);
 });
+
+// Обработка сигналов завершения
+process.on('SIGINT', () => {
+  console.log('Server shutting down (SIGINT)...');
+  shutdown();
+});
+
+process.on('SIGTERM', () => {
+  console.log('Server shutting down (SIGTERM)...');
+  shutdown();
+});
+
+function shutdown() {
+  // Завершение всех игр
+  serverState.activeGames.forEach((game, id) => {
+    endGame(id, 'server shutdown');
+  });
+
+  server.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
+
+  // Принудительное завершение через 5 секунд
+  setTimeout(() => {
+    console.error('Forcing shutdown...');
+    process.exit(1);
+  }, 5000);
+}
