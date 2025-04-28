@@ -1,5 +1,4 @@
-import { Sprite, Fighter, Background } from './classes.js';
-
+import { Sprite, Fighter, Background, Decoration } from './classes.js';
 // Инициализация игры
 const canvas = document.querySelector('canvas');
 const c = canvas.getContext('2d');
