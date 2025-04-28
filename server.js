@@ -13,7 +13,10 @@ const PORT = process.env.PORT || 3000;
 const gameState = {
   waitingPlayers: [],
   activeGames: {},
-  characters: ['samuraiMack', 'kenji']
+  characters: ['samuraiMack', 'kenji'],
+  maxHealth: 100,
+  attackDamage: 20,
+  gameDuration: 60
 };
 
 // Middleware
@@ -25,24 +28,31 @@ io.on('connection', (socket) => {
 
   // Обработка входа игрока
   socket.on('playerLogin', (username) => {
+    // Валидация имени
+    if (!username || username.trim().length === 0 || username.length > 12) {
+      socket.emit('loginError', 'Некорректное имя игрока');
+      return;
+    }
+
     // Проверка на занятость имени
-    if (gameState.waitingPlayers.some(p => p.username === username) ||
-        Object.values(gameState.activeGames).some(game => 
-          Object.values(game.players).some(p => p.username === username))) {
+    if (isUsernameTaken(username)) {
       socket.emit('usernameTaken');
       return;
     }
 
     const player = {
       id: socket.id,
-      username,
+      username: username.trim(),
       socket: socket,
-      character: null
+      character: null,
+      health: gameState.maxHealth,
+      position: { x: 0, y: 0 },
+      score: 0
     };
 
     gameState.waitingPlayers.push(player);
     updateWaitingList();
-    socket.emit('loginSuccess');
+    socket.emit('loginSuccess', { username: player.username });
   });
 
   // Обработка выбора соперника
@@ -66,43 +76,31 @@ io.on('connection', (socket) => {
     opponent.character = shuffledChars[1];
 
     // Создаем игру
-    const gameId = `${challenger.id}-${opponent.id}-${Date.now()}`;
+    const gameId = generateGameId(challenger.id, opponent.id);
     gameState.activeGames[gameId] = {
       id: gameId,
       players: {
         [challenger.id]: { 
           ...challenger, 
-          health: 100,
+          health: gameState.maxHealth,
           position: { x: 0, y: 0 }
         },
         [opponent.id]: { 
           ...opponent, 
-          health: 100,
-          position: { x: 400, y: 100 }
+          health: gameState.maxHealth,
+          position: { x: 400, y: 0 }
         }
       },
-      timer: 60,
-      timerInterval: null
+      timer: gameState.gameDuration,
+      timerInterval: null,
+      createdAt: Date.now()
     };
 
     // Запускаем таймер игры
     startGameTimer(gameId);
 
     // Отправляем данные игрокам
-    challenger.socket.emit('gameStart', { 
-      opponent: opponent.username,
-      yourCharacter: challenger.character,
-      opponentCharacter: opponent.character,
-      gameId
-    });
-
-    opponent.socket.emit('gameStart', { 
-      opponent: challenger.username,
-      yourCharacter: opponent.character,
-      opponentCharacter: challenger.character,
-      gameId
-    });
-
+    sendGameStartData(gameId, challenger, opponent);
     updateWaitingList();
   });
 
@@ -111,46 +109,52 @@ io.on('connection', (socket) => {
     const { gameId, position, velocity, lastKey, isAttacking } = data;
     const game = gameState.activeGames[gameId];
     
-    if (game && game.players[socket.id]) {
-      // Обновляем состояние игрока
-      game.players[socket.id].position = position;
-      game.players[socket.id].velocity = velocity;
-      game.players[socket.id].lastKey = lastKey;
-      game.players[socket.id].isAttacking = isAttacking;
-      
-      // Пересылаем данные второму игроку
-      const opponentId = Object.keys(game.players).find(id => id !== socket.id);
-      if (opponentId) {
-        game.players[opponentId].socket.emit('opponentMoved', {
-          position,
-          velocity,
-          lastKey,
-          isAttacking
-        });
-      }
+    if (!game || !game.players[socket.id]) return;
+
+    // Обновляем состояние игрока
+    game.players[socket.id].position = position;
+    game.players[socket.id].velocity = velocity;
+    game.players[socket.id].lastKey = lastKey;
+    game.players[socket.id].isAttacking = isAttacking;
+    
+    // Пересылаем данные второму игроку
+    const opponentId = getOpponentId(game, socket.id);
+    if (opponentId) {
+      game.players[opponentId].socket.emit('opponentMoved', {
+        position,
+        velocity,
+        lastKey,
+        isAttacking
+      });
     }
   });
 
   // Обработка атаки
-  socket.on('playerAttack', ({ gameId, damage }) => {
+  socket.on('playerAttack', ({ gameId }) => {
     const game = gameState.activeGames[gameId];
     if (!game) return;
 
-    const opponentId = Object.keys(game.players).find(id => id !== socket.id);
-    if (opponentId && game.players[opponentId]) {
-      game.players[opponentId].health -= damage;
+    const attackerId = socket.id;
+    const opponentId = getOpponentId(game, attackerId);
+    
+    if (!opponentId || !game.players[opponentId]) return;
+
+    // Проверяем столкновение атакующего бокса
+    if (checkAttackCollision(game, attackerId, opponentId)) {
+      game.players[opponentId].health -= gameState.attackDamage;
       
       // Отправляем обновление здоровья
       io.to(gameId).emit('updateHealth', {
-        playerHealth: game.players[socket.id].health,
+        playerHealth: game.players[attackerId].health,
         opponentHealth: game.players[opponentId].health,
-        attackerId: socket.id,
+        attackerId,
         receiverId: opponentId
       });
 
       // Проверяем условие победы
       if (game.players[opponentId].health <= 0) {
-        endGame(gameId, `${game.players[socket.id].username} победил!`);
+        game.players[attackerId].score++;
+        endGame(gameId, `${game.players[attackerId].username} победил!`);
       }
     }
   });
@@ -171,13 +175,42 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Функция обновления списка ожидания
+  // Вспомогательные функции
+  function isUsernameTaken(username) {
+    return gameState.waitingPlayers.some(p => p.username === username) ||
+           Object.values(gameState.activeGames).some(game => 
+             Object.values(game.players).some(p => p.username === username));
+  }
+
+  function generateGameId(player1Id, player2Id) {
+    return `${player1Id}-${player2Id}-${Date.now()}`;
+  }
+
+  function getOpponentId(game, playerId) {
+    return Object.keys(game.players).find(id => id !== playerId);
+  }
+
+  function checkAttackCollision(game, attackerId, opponentId) {
+    const attacker = game.players[attackerId];
+    const opponent = game.players[opponentId];
+    
+    return (
+      attacker.isAttacking &&
+      attacker.position.x + attacker.attackBox.offset.x + attacker.attackBox.width >= opponent.position.x &&
+      attacker.position.x + attacker.attackBox.offset.x <= opponent.position.x + opponent.width &&
+      attacker.position.y + attacker.attackBox.offset.y + attacker.attackBox.height >= opponent.position.y &&
+      attacker.position.y + attacker.attackBox.offset.y <= opponent.position.y + opponent.height
+    );
+  }
+
   function updateWaitingList() {
-    const waitingPlayers = gameState.waitingPlayers.map(p => p.username);
+    const waitingPlayers = gameState.waitingPlayers.map(p => ({
+      username: p.username,
+      id: p.id
+    }));
     io.emit('updateWaitingList', waitingPlayers);
   }
 
-  // Функция запуска таймера игры
   function startGameTimer(gameId) {
     const game = gameState.activeGames[gameId];
     if (!game) return;
@@ -192,7 +225,22 @@ io.on('connection', (socket) => {
     }, 1000);
   }
 
-  // Функция завершения игры
+  function sendGameStartData(gameId, player1, player2) {
+    player1.socket.emit('gameStart', { 
+      opponent: player2.username,
+      yourCharacter: player1.character,
+      opponentCharacter: player2.character,
+      gameId
+    });
+
+    player2.socket.emit('gameStart', { 
+      opponent: player1.username,
+      yourCharacter: player2.character,
+      opponentCharacter: player1.character,
+      gameId
+    });
+  }
+
   function endGame(gameId, reason) {
     const game = gameState.activeGames[gameId];
     if (!game) return;
@@ -203,44 +251,56 @@ io.on('connection', (socket) => {
     }
 
     const players = Object.values(game.players);
-    
-    // Определяем победителя
-    let winner = null;
-    if (reason) {
-      // Если игра завершена по причине (отключение, время)
-      winner = players.find(p => p.id !== socket.id)?.username;
-    } else {
-      // Если игра завершена по здоровью
-      if (players[0].health > players[1].health) {
-        winner = players[0].username;
-      } else if (players[0].health < players[1].health) {
-        winner = players[1].username;
-      }
-    }
+    let winner = determineWinner(game, reason);
 
     // Отправляем результат
     players.forEach(player => {
       if (player.socket) {
+        const opponent = players.find(p => p.id !== player.id);
+        
         player.socket.emit('gameOver', { 
-          winner, 
+          winner: winner?.username,
           reason,
           yourHealth: player.health,
-          opponentHealth: players.find(p => p.id !== player.id)?.health || 0
+          opponentHealth: opponent?.health || 0,
+          yourScore: player.score,
+          opponentScore: opponent?.score || 0
         });
         
         // Возвращаем игроков в лобби
-        gameState.waitingPlayers.push({
-          id: player.id,
-          username: player.username,
-          socket: player.socket,
-          character: null
-        });
+        if (!player.socket.disconnected) {
+          gameState.waitingPlayers.push({
+            id: player.id,
+            username: player.username,
+            socket: player.socket,
+            character: null,
+            health: gameState.maxHealth,
+            score: player.score
+          });
+        }
       }
     });
 
     // Удаляем игру
     delete gameState.activeGames[gameId];
     updateWaitingList();
+  }
+
+  function determineWinner(game, reason) {
+    const players = Object.values(game.players);
+    
+    if (reason) {
+      // Если игра завершена по причине (отключение, время)
+      return players.find(p => !p.socket.disconnected);
+    } else {
+      // Если игра завершена по здоровью
+      if (players[0].health > players[1].health) {
+        return players[0];
+      } else if (players[0].health < players[1].health) {
+        return players[1];
+      }
+    }
+    return null; // Ничья
   }
 });
 

@@ -1,5 +1,5 @@
 // Класс Sprite для работы с изображениями и анимацией
-class Sprite {
+export class Sprite {
     constructor({
         position,
         imageSrc,
@@ -23,7 +23,7 @@ class Sprite {
     }
 
     // Отрисовка спрайта
-    draw() {
+    draw(c) {
         c.drawImage(
             this.image,
             this.framesCurrent * (this.image.width / this.framesMax),
@@ -51,14 +51,14 @@ class Sprite {
     }
 
     // Обновление состояния
-    update() {
-        this.draw();
+    update(c) {
+        this.draw(c);
         this.animateFrames();
     }
 }
 
 // Класс Fighter (наследуется от Sprite)
-class Fighter extends Sprite {
+export class Fighter extends Sprite {
     constructor({
         position,
         velocity,
@@ -109,21 +109,13 @@ class Fighter extends Sprite {
     }
 
     // Обновление состояния бойца
-    update() {
-        this.draw();
+    update(c, gravity, canvas) {
+        this.draw(c);
         if (!this.dead) this.animateFrames();
 
         // Обновление позиции атакующего бокса
         this.attackBox.position.x = this.position.x + this.attackBox.offset.x;
         this.attackBox.position.y = this.position.y + this.attackBox.offset.y;
-
-        // Отрисовка атакующего бокса (для отладки)
-        // c.fillRect(
-        //     this.attackBox.position.x,
-        //     this.attackBox.position.y,
-        //     this.attackBox.width,
-        //     this.attackBox.height
-        // );
 
         this.position.x += this.velocity.x;
         this.position.y += this.velocity.y;
@@ -131,7 +123,7 @@ class Fighter extends Sprite {
         // Гравитация и проверка нахождения на земле
         if (this.position.y + this.height + this.velocity.y >= canvas.height - 96) {
             this.velocity.y = 0;
-            this.position.y = 330;
+            this.position.y = canvas.height - this.height - 96;
         } else {
             this.velocity.y += gravity;
         }
@@ -230,8 +222,8 @@ class Fighter extends Sprite {
     }
 }
 
-// Класс для фона (может быть расширен для параллакс-эффекта)
-class Background extends Sprite {
+// Класс для фона
+export class Background extends Sprite {
     constructor({ position, imageSrc }) {
         super({
             position,
@@ -241,13 +233,13 @@ class Background extends Sprite {
         });
     }
 
-    update() {
-        this.draw();
+    update(c) {
+        this.draw(c);
     }
 }
 
-// Класс для декораций (магазин и другие элементы)
-class Decoration extends Sprite {
+// Класс для декораций
+export class Decoration extends Sprite {
     constructor({ position, imageSrc, scale = 1, framesMax = 1 }) {
         super({
             position,
@@ -257,8 +249,8 @@ class Decoration extends Sprite {
         });
     }
 
-    update() {
-        this.draw();
+    update(c) {
+        this.draw(c);
         this.animateFrames();
     }
 }

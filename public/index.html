@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Multiplayer Fighting Game</title>
+    <title>Многопользовательский Файтинг</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
@@ -213,15 +213,16 @@
 </head>
 <body>
     <div id="loginScreen">
-        <h1>Multiplayer Fighting Game</h1>
-        <input type="text" id="usernameInput" placeholder="Enter your username" maxlength="12" autocomplete="off">
+        <h1>Многопользовательский Файтинг</h1>
+        <h2>Вступайте в Игры</h2>
+        <input type="text" id="usernameInput" placeholder="Введите имя игрока" maxlength="12" autocomplete="off">
         <button id="loginButton">Enter Game</button>
-        <p id="errorText">Username is already taken</p>
+        <p id="errorText">Имя уже занято</p>
     </div>
 
     <div id="lobbyScreen">
-        <h1>Waiting for opponent</h1>
-        <h2>Online players:</h2>
+        <h1>Ожидание соперника</h1>
+        <h2>Игроки онлайн:</h2>
         <div id="waitingList"></div>
     </div>
 
@@ -246,48 +247,14 @@
         </div>
     </div>
 
+    <!-- Подключаем Socket.IO -->
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    
+    <!-- Основной игровой скрипт -->
     <script type="module">
-        import { 
-            rectangularCollision,
-            determineWinner,
-            decreaseTimer,
-            timer,
-            timerId,
-            keys,
-            handleKeyDown,
-            handleKeyUp,
-            createCharacterSprites,
-            createAttackBox,
-            lerp,
-            distance,
-            checkCanvasBounds
-        } from './js/utils.js';
+        import { Sprite, Fighter, Background } from './js/classes.js';
         
-        import { Sprite, Fighter, Background, Decoration } from './js/classes.js';
-        
-        // Экспортируем переменные для доступа из консоли (для отладки)
-        window.game = {
-            rectangularCollision,
-            determineWinner,
-            decreaseTimer,
-            timer,
-            timerId,
-            keys,
-            handleKeyDown,
-            handleKeyUp,
-            createCharacterSprites,
-            createAttackBox,
-            lerp,
-            distance,
-            checkCanvasBounds,
-            Sprite,
-            Fighter,
-            Background,
-            Decoration
-        };
-
-        // Основной код игры из index.js
+        // Инициализация игры
         const canvas = document.querySelector('canvas');
         const c = canvas.getContext('2d');
         const socket = io();
@@ -300,6 +267,10 @@
         const loginButton = document.getElementById('loginButton');
         const waitingList = document.getElementById('waitingList');
         const errorText = document.getElementById('errorText');
+        const playerHealthBar = document.getElementById('playerHealth');
+        const opponentHealthBar = document.getElementById('opponentHealth');
+        const timerElement = document.getElementById('timer');
+        const displayText = document.getElementById('displayText');
 
         // Игровые переменные
         let player;
@@ -310,7 +281,18 @@
         let opponentCharacter;
         let background;
         let shop;
-        let gravity = 0.3;
+        const gravity = 0.3;
+        let timer = 60;
+
+        // Управление клавишами
+        const keys = {
+            a: { pressed: false },
+            d: { pressed: false },
+            w: { pressed: false },
+            ArrowRight: { pressed: false },
+            ArrowLeft: { pressed: false },
+            ArrowUp: { pressed: false }
+        };
 
         // Обработчики событий
         loginButton.addEventListener('click', () => {
@@ -363,7 +345,7 @@
                 imageSrc: `./img/${myCharacter}/Idle.png`,
                 framesMax: myCharacter === 'samuraiMack' ? 8 : 4,
                 scale: 2.5,
-                sprites: createCharacterSprites(myCharacter),
+                sprites: createSprites(myCharacter),
                 attackBox: {
                     offset: { x: myCharacter === 'samuraiMack' ? 100 : -170, y: 50 },
                     width: myCharacter === 'samuraiMack' ? 160 : 170,
@@ -378,7 +360,7 @@
                 imageSrc: `./img/${opponentCharacter}/Idle.png`,
                 framesMax: opponentCharacter === 'samuraiMack' ? 8 : 4,
                 scale: 2.5,
-                sprites: createCharacterSprites(opponentCharacter),
+                sprites: createSprites(opponentCharacter),
                 attackBox: {
                     offset: { x: opponentCharacter === 'samuraiMack' ? 100 : -170, y: 50 },
                     width: opponentCharacter === 'samuraiMack' ? 160 : 170,
@@ -387,7 +369,7 @@
             });
             
             // Загрузка фона
-            background = new Sprite({
+            background = new Background({
                 position: { x: 0, y: 0 },
                 imageSrc: './img/background.png'
             });
@@ -431,8 +413,8 @@
         });
 
         socket.on('updateHealth', (data) => {
-            document.querySelector('#playerHealth').style.width = data.playerHealth + '%';
-            document.querySelector('#opponentHealth').style.width = data.opponentHealth + '%';
+            playerHealthBar.style.width = data.playerHealth + '%';
+            opponentHealthBar.style.width = data.opponentHealth + '%';
             
             // Если текущий игрок получил удар
             if (data.receiverId === socket.id) {
@@ -442,11 +424,10 @@
 
         socket.on('updateTimer', (time) => {
             timer = time;
-            document.querySelector('#timer').innerHTML = timer;
+            timerElement.innerHTML = timer;
         });
 
         socket.on('gameOver', (data) => {
-            const displayText = document.querySelector('#displayText');
             displayText.style.display = 'flex';
             
             if (data.reason) {
@@ -472,6 +453,43 @@
             }, 3000);
         });
 
+        // Функции игры
+        function createSprites(character) {
+            const basePath = `./img/${character}/`;
+            const isSamurai = character === 'samuraiMack';
+            
+            return {
+                idle: {
+                    imageSrc: basePath + 'Idle.png',
+                    framesMax: isSamurai ? 8 : 4
+                },
+                run: {
+                    imageSrc: basePath + 'Run.png',
+                    framesMax: 8
+                },
+                jump: {
+                    imageSrc: basePath + 'Jump.png',
+                    framesMax: 2
+                },
+                fall: {
+                    imageSrc: basePath + 'Fall.png',
+                    framesMax: 2
+                },
+                attack1: {
+                    imageSrc: basePath + 'Attack1.png',
+                    framesMax: isSamurai ? 6 : 4
+                },
+                takeHit: {
+                    imageSrc: basePath + (isSamurai ? 'Take Hit - white silhouette.png' : 'Take hit.png'),
+                    framesMax: isSamurai ? 4 : 3
+                },
+                death: {
+                    imageSrc: basePath + 'Death.png',
+                    framesMax: isSamurai ? 6 : 7
+                }
+            };
+        }
+
         function animate() {
             if (!player || !opponent) return;
             
@@ -479,14 +497,14 @@
             c.fillStyle = 'black';
             c.fillRect(0, 0, canvas.width, canvas.height);
             
-            background.update();
-            shop.update();
+            background.update(c);
+            if (shop) shop.update(c);
             
             c.fillStyle = 'rgba(255, 255, 255, 0.15)';
             c.fillRect(0, 0, canvas.width, canvas.height);
             
-            player.update();
-            opponent.update();
+            player.update(c, gravity, canvas);
+            opponent.update(c, gravity, canvas);
             
             player.velocity.x = 0;
             
@@ -531,7 +549,10 @@
             }
             
             // Проверка на выход за границы экрана
-            checkCanvasBounds(player, canvas);
+            if (player.position.x < 0) player.position.x = 0;
+            if (player.position.x + player.width > canvas.width) {
+                player.position.x = canvas.width - player.width;
+            }
         }
 
         // Обработчики клавиатуры
@@ -569,10 +590,15 @@
             }
         });
 
-        // Автофокус на поле ввода при загрузке
-        window.addEventListener('load', () => {
-            usernameInput.focus();
-        });
+        // Функция проверки столкновений
+        function rectangularCollision({ rectangle1, rectangle2 }) {
+            return (
+                rectangle1.attackBox.position.x + rectangle1.attackBox.width >= rectangle2.position.x &&
+                rectangle1.attackBox.position.x <= rectangle2.position.x + rectangle2.width &&
+                rectangle1.attackBox.position.y + rectangle1.attackBox.height >= rectangle2.position.y &&
+                rectangle1.attackBox.position.y <= rectangle2.position.y + rectangle2.height
+            );
+        }
     </script>
 </body>
 </html>

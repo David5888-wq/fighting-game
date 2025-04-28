@@ -1,3 +1,6 @@
+import { Sprite, Fighter, Background } from './classes.js';
+
+// Инициализация игры
 const canvas = document.querySelector('canvas');
 const c = canvas.getContext('2d');
 const socket = io();
@@ -10,6 +13,10 @@ const usernameInput = document.getElementById('usernameInput');
 const loginButton = document.getElementById('loginButton');
 const waitingList = document.getElementById('waitingList');
 const errorText = document.getElementById('errorText');
+const playerHealthBar = document.getElementById('playerHealth');
+const opponentHealthBar = document.getElementById('opponentHealth');
+const timerElement = document.getElementById('timer');
+const displayText = document.getElementById('displayText');
 
 // Игровые переменные
 let player;
@@ -20,9 +27,11 @@ let myCharacter;
 let opponentCharacter;
 let background;
 let shop;
-let gravity = 0.3;
+const gravity = 0.3;
+let timer = 60;
 
-let keys = {
+// Управление клавишами
+const keys = {
     a: { pressed: false },
     d: { pressed: false },
     w: { pressed: false },
@@ -30,9 +39,6 @@ let keys = {
     ArrowLeft: { pressed: false },
     ArrowUp: { pressed: false }
 };
-
-let timer = 60;
-let timerId;
 
 // Обработчики событий
 loginButton.addEventListener('click', () => {
@@ -51,6 +57,7 @@ socket.on('usernameTaken', () => {
 socket.on('loginSuccess', () => {
     loginScreen.style.display = 'none';
     lobbyScreen.style.display = 'flex';
+    errorText.style.display = 'none';
 });
 
 socket.on('updateWaitingList', (players) => {
@@ -108,7 +115,7 @@ socket.on('gameStart', (data) => {
     });
     
     // Загрузка фона
-    background = new Sprite({
+    background = new Background({
         position: { x: 0, y: 0 },
         imageSrc: './img/background.png'
     });
@@ -152,8 +159,8 @@ socket.on('opponentMoved', (data) => {
 });
 
 socket.on('updateHealth', (data) => {
-    document.querySelector('#playerHealth').style.width = data.playerHealth + '%';
-    document.querySelector('#opponentHealth').style.width = data.opponentHealth + '%';
+    playerHealthBar.style.width = data.playerHealth + '%';
+    opponentHealthBar.style.width = data.opponentHealth + '%';
     
     // Если текущий игрок получил удар
     if (data.receiverId === socket.id) {
@@ -163,11 +170,10 @@ socket.on('updateHealth', (data) => {
 
 socket.on('updateTimer', (time) => {
     timer = time;
-    document.querySelector('#timer').innerHTML = timer;
+    timerElement.innerHTML = timer;
 });
 
 socket.on('gameOver', (data) => {
-    const displayText = document.querySelector('#displayText');
     displayText.style.display = 'flex';
     
     if (data.reason) {
@@ -237,14 +243,14 @@ function animate() {
     c.fillStyle = 'black';
     c.fillRect(0, 0, canvas.width, canvas.height);
     
-    background.update();
-    shop.update();
+    background.update(c);
+    if (shop) shop.update(c);
     
     c.fillStyle = 'rgba(255, 255, 255, 0.15)';
     c.fillRect(0, 0, canvas.width, canvas.height);
     
-    player.update();
-    opponent.update();
+    player.update(c, gravity, canvas);
+    opponent.update(c, gravity, canvas);
     
     player.velocity.x = 0;
     
@@ -330,7 +336,7 @@ window.addEventListener('keyup', (event) => {
     }
 });
 
-// Функция проверки столкновений (из utils.js)
+// Функция проверки столкновений
 function rectangularCollision({ rectangle1, rectangle2 }) {
     return (
         rectangle1.attackBox.position.x + rectangle1.attackBox.width >= rectangle2.position.x &&
