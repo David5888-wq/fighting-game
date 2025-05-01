@@ -1,75 +1,61 @@
-// Базовый класс Sprite для работы с изображениями и анимацией
-export class Sprite {
+class Sprite {
     constructor({
-        position = { x: 0, y: 0 },
+        position,
         imageSrc,
         scale = 1,
         framesMax = 1,
         offset = { x: 0, y: 0 },
-        sprites
+        animationSpeed = 100 // ⚡ Время в ms на кадр
     }) {
         this.position = position;
         this.image = new Image();
-        this.image.onerror = () => console.error('Не удалось загрузить изображение:', imageSrc);
         this.image.src = imageSrc;
         this.scale = scale;
         this.framesMax = framesMax;
         this.framesCurrent = 0;
-        this.framesElapsed = 0;
-        this.framesHold = 5;
         this.offset = offset;
-        this.sprites = sprites;
-        this.width = 0;
-        this.height = 0;
-        this.loaded = false;
-
-        this.image.onload = () => {
-            this.width = (this.image.width / this.framesMax) * this.scale;
-            this.height = this.image.height * this.scale;
-            this.loaded = true;
-        };
+        this.width = 50;
+        this.height = 150;
+        
+        // ⚡ Параметры анимации
+        this.animationSpeed = animationSpeed;
+        this.lastFrameUpdate = Date.now();
+        this.lastUpdate = Date.now();
     }
 
-    // Отрисовка спрайта
-    draw(ctx) {
-        if (!this.loaded) return;
-
-        ctx.drawImage(
+    draw() {
+        if (!this.image.complete) return;
+        
+        const frameWidth = this.image.width / this.framesMax;
+        c.drawImage(
             this.image,
-            this.framesCurrent * (this.image.width / this.framesMax),
+            this.framesCurrent * frameWidth,
             0,
-            this.image.width / this.framesMax,
+            frameWidth,
             this.image.height,
             this.position.x - this.offset.x,
             this.position.y - this.offset.y,
-            (this.image.width / this.framesMax) * this.scale,
+            frameWidth * this.scale,
             this.image.height * this.scale
         );
     }
 
-    // Анимация кадров
+    // ⚡ Анимация на основе времени
     animateFrames() {
-        this.framesElapsed++;
-
-        if (this.framesElapsed % this.framesHold === 0) {
-            if (this.framesCurrent < this.framesMax - 1) {
-                this.framesCurrent++;
-            } else {
-                this.framesCurrent = 0;
-            }
+        const now = Date.now();
+        if (now - this.lastFrameUpdate > this.animationSpeed) {
+            this.framesCurrent = (this.framesCurrent + 1) % this.framesMax;
+            this.lastFrameUpdate = now;
         }
     }
 
-    // Обновление состояния
-    update(ctx) {
-        if (!this.loaded) return;
-        this.draw(ctx);
+    update(deltaTime) {
+        this.draw();
         this.animateFrames();
     }
 }
 
-// Класс Fighter (наследуется от Sprite)
-export class Fighter extends Sprite {
+class Fighter extends Sprite {
     constructor({
         position,
         velocity = { x: 0, y: 0 },
@@ -79,7 +65,9 @@ export class Fighter extends Sprite {
         framesMax = 1,
         offset = { x: 0, y: 0 },
         sprites,
-        attackBox = { offset: {}, width: undefined, height: undefined }
+        attackBox = { offset: {}, width: undefined, height: undefined },
+        isEnemy = false,
+        animationSpeed = 100
     }) {
         super({
             position,
@@ -87,11 +75,11 @@ export class Fighter extends Sprite {
             scale,
             framesMax,
             offset,
-            sprites
+            animationSpeed
         });
 
         this.velocity = velocity;
-        this.lastKey = null;
+        this.lastKey = '';
         this.attackBox = {
             position: {
                 x: this.position.x,
@@ -104,157 +92,89 @@ export class Fighter extends Sprite {
         this.color = color;
         this.isAttacking = false;
         this.health = 100;
+        this.sprites = sprites;
         this.dead = false;
-        this.framesCurrent = 0;
-        this.framesElapsed = 0;
-        this.framesHold = 5;
-        this.spritesLoaded = false;
+        this.isEnemy = isEnemy;
 
-        // Предзагрузка всех спрайтов персонажа с обработкой ошибок
-        if (this.sprites) {
-            let loadedCount = 0;
-            const totalSprites = Object.keys(this.sprites).length;
-
-            for (const sprite in this.sprites) {
-                this.sprites[sprite].image = new Image();
-                this.sprites[sprite].image.onerror = () => {
-                    console.error('Не удалось загрузить спрайт:', this.sprites[sprite].imageSrc);
-                };
-                this.sprites[sprite].image.src = this.sprites[sprite].imageSrc;
-                
-                this.sprites[sprite].image.onload = () => {
-                    loadedCount++;
-                    if (loadedCount === totalSprites) {
-                        this.spritesLoaded = true;
-                    }
-                };
-            }
+        // ⚡ Предзагрузка всех анимаций
+        for (const sprite in this.sprites) {
+            this.sprites[sprite].image = new Image();
+            this.sprites[sprite].image.src = this.sprites[sprite].imageSrc;
         }
     }
 
-    // Обновление состояния бойца
-    update(ctx, gravity, canvas) {
-        if (!this.loaded || !this.spritesLoaded) return;
-        
-        this.draw(ctx);
-        if (!this.dead) this.animateFrames();
+    update(deltaTime) {
+        super.update(deltaTime);
+        if (this.dead) return;
 
-        // Обновление позиции атакующего бокса
-        this.attackBox.position.x = this.position.x + this.attackBox.offset.x;
-        this.attackBox.position.y = this.position.y + this.attackBox.offset.y;
+        // ⚡ Физика с deltaTime
+        const timeFactor = deltaTime / 16.67; // Нормализация для 60 FPS
+        this.position.x += this.velocity.x * timeFactor;
+        this.position.y += this.velocity.y * timeFactor;
 
-        this.position.x += this.velocity.x;
-        this.position.y += this.velocity.y;
+        // Гравитация
+        this.velocity.y += gravity * timeFactor;
 
-        // Гравитация и проверка нахождения на земле
-        if (this.position.y + this.height + this.velocity.y >= canvas.height - 96) {
+        // Ограничение по земле
+        if (this.position.y + this.height >= canvas.height - 96) {
             this.velocity.y = 0;
-            this.position.y = canvas.height - this.height - 96;
-        } else {
-            this.velocity.y += gravity;
+            this.position.y = 330;
         }
+
+        // Обновление атак бокса
+        this.attackBox.position.x = this.position.x + 
+            (this.isEnemy ? -this.attackBox.offset.x : this.attackBox.offset.x);
+        this.attackBox.position.y = this.position.y + this.attackBox.offset.y;
     }
 
-    // Атака
     attack() {
-        if (this.dead || !this.spritesLoaded) return;
+        if (this.dead) return;
         this.switchSprite('attack1');
         this.isAttacking = true;
     }
 
-    // Получение урона
     takeHit() {
-        if (this.dead || !this.spritesLoaded) return;
+        if (this.dead) return;
         
         this.health -= 20;
+        this.switchSprite('takeHit');
 
         if (this.health <= 0) {
             this.switchSprite('death');
             this.dead = true;
-        } else {
-            this.switchSprite('takeHit');
         }
     }
 
-    // Переключение спрайтов
+    // ⚡ Улучшенная смена анимаций
     switchSprite(sprite) {
-        if (!this.spritesLoaded) return;
-
-        // Если умер и анимация смерти завершена - не переключать
-        if (this.image === this.sprites?.death?.image) {
+        if (this.image === this.sprites.death.image) {
             if (this.framesCurrent === this.sprites.death.framesMax - 1) {
                 this.dead = true;
             }
             return;
         }
 
-        // Перекрытие других анимаций
-        if (
-            this.image === this.sprites?.attack1?.image &&
-            this.framesCurrent < this.sprites.attack1.framesMax - 1
-        ) return;
-
-        if (
-            this.image === this.sprites?.takeHit?.image &&
-            this.framesCurrent < this.sprites.takeHit.framesMax - 1
-        ) return;
-
-        // Защита от ошибок при отсутствии спрайта
-        if (!this.sprites?.[sprite]?.image) {
-            console.warn(`Спрайт не найден: ${sprite}`);
+        // Приоритет анимаций
+        const priority = ['death', 'takeHit', 'attack1'];
+        if (priority.includes(sprite) && this.image !== this.sprites[sprite].image) {
+            this.overrideAnimation(sprite);
             return;
         }
 
-        // Переключение на новый спрайт
-        if (this.image !== this.sprites[sprite].image) {
-            const prevImage = this.image;
-            this.image = this.sprites[sprite].image;
-            this.framesMax = this.sprites[sprite].framesMax;
-            this.framesCurrent = 0;
+        if (
+            (this.image === this.sprites.attack1.image && 
+             this.framesCurrent < this.sprites.attack1.framesMax - 1) ||
+            (this.image === this.sprites.takeHit.image && 
+             this.framesCurrent < this.sprites.takeHit.framesMax - 1)
+        ) return;
 
-            // Если изображение еще не загружено, возвращаем предыдущее
-            if (!this.image.complete || this.image.naturalWidth === 0) {
-                this.image = prevImage;
-                return;
-            }
-        }
-    }
-}
-
-// Класс для фона
-export class Background extends Sprite {
-    constructor({ position, imageSrc }) {
-        super({
-            position,
-            imageSrc,
-            scale: 1,
-            framesMax: 1
-        });
-        this.width = 1024;
-        this.height = 576;
+        this.overrideAnimation(sprite);
     }
 
-    draw(ctx) {
-        if (!this.loaded) return;
-        
-        ctx.drawImage(
-            this.image,
-            this.position.x,
-            this.position.y,
-            this.width,
-            this.height
-        );
-    }
-}
-
-// Класс для декораций (магазина)
-export class Decoration extends Sprite {
-    constructor({ position, imageSrc, scale = 1, framesMax = 1 }) {
-        super({
-            position,
-            imageSrc,
-            scale,
-            framesMax
-        });
+    overrideAnimation(sprite) {
+        this.image = this.sprites[sprite].image;
+        this.framesMax = this.sprites[sprite].framesMax;
+        this.framesCurrent = 0;
+        this.animationSpeed = this.sprites[sprite].animationSpeed || 100;
     }
 }

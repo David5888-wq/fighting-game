@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Многопользовательский Файтинг</title>
+    <title>Multiplayer Fighting Game</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
@@ -21,113 +21,72 @@
             align-items: center;
             min-height: 100vh;
             background-color: #111;
-            color: white;
             overflow: hidden;
         }
-
-        #loginScreen, #lobbyScreen, #gameScreen {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
+        
+        #lobby-container {
+            width: 800px;
+            background-color: #222;
+            border: 4px solid #444;
             padding: 20px;
+            color: white;
             text-align: center;
-            max-width: 800px;
-            width: 100%;
         }
-
-        #loginScreen {
-            display: flex;
+        
+        #username-form {
+            margin-bottom: 20px;
         }
-
-        #lobbyScreen, #gameScreen {
-            display: none;
-        }
-
-        input, button {
-            margin: 10px;
-            padding: 15px;
-            font-family: "Press Start 2P", cursive;
+        
+        #username-input {
+            padding: 10px;
             font-size: 16px;
-            border: none;
-            outline: none;
-            border-radius: 5px;
-        }
-
-        input {
-            background-color: #333;
-            color: white;
             width: 300px;
-            text-align: center;
-            border: 2px solid #818cf8;
+            margin-right: 10px;
         }
-
+        
         button {
-            background-color: #818cf8;
+            padding: 10px 20px;
+            background-color: #4CAF50;
             color: white;
+            border: none;
             cursor: pointer;
-            transition: all 0.2s;
-            width: 300px;
+            font-size: 16px;
         }
-
+        
         button:hover {
-            background-color: #6366f1;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            background-color: #45a049;
         }
-
-        button:active {
-            transform: translateY(0);
+        
+        #players-list {
+            margin-top: 20px;
+            text-align: left;
         }
-
-        #waitingList {
-            margin: 20px;
-            max-height: 300px;
-            overflow-y: auto;
-            width: 100%;
-            max-width: 400px;
-            scrollbar-width: thin;
-            scrollbar-color: #818cf8 #333;
-        }
-
-        #waitingList::-webkit-scrollbar {
-            width: 8px;
-        }
-
-        #waitingList::-webkit-scrollbar-track {
-            background: #333;
-            border-radius: 4px;
-        }
-
-        #waitingList::-webkit-scrollbar-thumb {
-            background-color: #818cf8;
-            border-radius: 4px;
-        }
-
-        .playerItem {
-            padding: 15px;
-            margin: 10px;
+        
+        .player-item {
+            padding: 10px;
+            margin: 5px 0;
             background-color: #333;
             cursor: pointer;
-            border-radius: 5px;
-            transition: all 0.2s;
-            border: 2px solid transparent;
+            display: flex;
+            justify-content: space-between;
         }
-
-        .playerItem:hover {
+        
+        .player-item:hover {
             background-color: #444;
-            transform: scale(1.02);
-            border-color: #818cf8;
         }
-
-        .empty-message {
-            padding: 20px;
-            color: #888;
-            font-size: 14px;
+        
+        .player-status {
+            color: #4CAF50;
         }
-
+        
+        .player-status.in-game {
+            color: #f44336;
+        }
+        
         .game-container {
             position: relative;
-            display: inline-block;
+            display: none;
+            inline-block;
         }
         
         .game-ui {
@@ -144,27 +103,30 @@
             width: 100%;
             height: 30px;
             border: 4px solid white;
-            background-color: rgba(0, 0, 0, 0.5);
+        }
+        
+        .health-bar-background {
+            background-color: red;
+            height: 100%;
+            width: 100%;
         }
         
         #playerHealth {
             position: absolute;
-            background: linear-gradient(to right, #4f46e5, #818cf8);
+            background: #818cf8;
             top: 0;
             right: 0;
             bottom: 0;
             width: 100%;
-            transition: width 0.3s ease;
         }
         
-        #opponentHealth {
+        #enemyHealth {
             position: absolute;
-            background: linear-gradient(to left, #4f46e5, #818cf8);
+            background: #818cf8;
             top: 0;
             right: 0;
             bottom: 0;
             left: 0;
-            transition: width 0.3s ease;
         }
         
         #timer {
@@ -177,7 +139,6 @@
             justify-content: center;
             color: white;
             border: 4px solid white;
-            font-size: 24px;
         }
         
         #displayText {
@@ -192,128 +153,50 @@
             left: 0;
             font-size: 48px;
             z-index: 20;
-            text-shadow: 3px 3px 0px black;
-            animation: pulse 1.5s infinite;
         }
-
-        @keyframes pulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.1); }
-            100% { transform: scale(1); }
-        }
-
+        
         canvas {
+            display: block;
+            background: black;
             border: 4px solid #333;
-            background-color: #222;
-            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
-            width: 100%;
-            max-width: 1024px;
-            height: auto;
-        }
-
-        #errorText {
-            color: #ff5555;
-            margin-top: 10px;
-            display: none;
-            font-size: 12px;
-            max-width: 300px;
-            line-height: 1.5;
-            padding: 10px;
-            background-color: rgba(0, 0, 0, 0.5);
-            border-radius: 5px;
-        }
-
-        h1 {
-            margin-bottom: 20px;
-            font-size: 24px;
-            color: #818cf8;
-            text-shadow: 2px 2px 0px black;
-        }
-
-        h2 {
-            margin: 15px 0;
-            font-size: 18px;
-            color: #ddd;
-        }
-
-        @media (max-width: 768px) {
-            h1 {
-                font-size: 18px;
-            }
-            h2 {
-                font-size: 14px;
-            }
-            input, button {
-                width: 90%;
-                font-size: 14px;
-                padding: 10px;
-            }
-            #displayText {
-                font-size: 32px;
-            }
-            #timer {
-                height: 40px;
-                width: 80px;
-                font-size: 18px;
-            }
         }
     </style>
 </head>
 <body>
-    <div id="loginScreen">
-        <h1>МНОГОПОЛЬЗОВАТЕЛЬСКИЙ ФАЙТИНГ</h1>
-        <h2>ВСТУПАЙТЕ В БОЙ</h2>
-        <input type="text" id="usernameInput" placeholder="Введите имя игрока" maxlength="12" autocomplete="off">
-        <button id="loginButton">ВОЙТИ В ИГРУ</button>
-        <p id="errorText"></p>
-    </div>
-
-    <div id="lobbyScreen">
-        <h1>ОЖИДАНИЕ СОПЕРНИКА</h1>
-        <h2>ИГРОКИ ОНЛАЙН:</h2>
-        <div id="waitingList">
-            <div class="empty-message">Загрузка списка игроков...</div>
+    <div id="lobby-container">
+        <h1>Fighting Game Lobby</h1>
+        <div id="username-form">
+            <input type="text" id="username-input" placeholder="Enter your username" maxlength="20">
+            <button id="register-btn">Join Game</button>
+        </div>
+        <div id="players-list">
+            <h2>Available Players:</h2>
+            <div id="players-container"></div>
         </div>
     </div>
 
-    <div id="gameScreen">
-        <div class="game-container">
-            <div class="game-ui">
-                <div class="health-bar-container" style="border-right: none;">
-                    <div id="playerHealth"></div>
-                </div>
-                
-                <div id="timer">60</div>
-                
-                <div class="health-bar-container" style="border-left: none;">
-                    <div id="opponentHealth"></div>
-                </div>
+    <div class="game-container">
+        <div class="game-ui">
+            <div class="health-bar-container" style="border-right: none;">
+                <div class="health-bar-background"></div>
+                <div id="playerHealth"></div>
             </div>
             
-            <div id="displayText"></div>
-            <canvas width="1024" height="576"></canvas>
+            <div id="timer">60</div>
+            
+            <div class="health-bar-container" style="border-left: none;">
+                <div class="health-bar-background"></div>
+                <div id="enemyHealth"></div>
+            </div>
         </div>
+        
+        <div id="displayText"></div>
+        <canvas width="1024" height="576"></canvas>
     </div>
 
-    <!-- Подключаем Socket.IO с резервным источником -->
-    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
-    <script>
-        if (typeof io === 'undefined') {
-            document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.4/socket.io.min.js"><\/script>');
-        }
-    </script>
-    
-    <!-- Основные игровые скрипты с атрибутами defer -->
-    <script type="module" src="/js/classes.js" defer></script>
-    <script type="module" src="/js/index.js" defer></script>
-    
-    <!-- Fallback для браузеров без поддержки модулей -->
-    <script>
-        if (!('noModule' in HTMLScriptElement.prototype)) {
-            const script = document.createElement('script');
-            script.src = '/js/legacy-bundle.js';
-            document.body.appendChild(script);
-        }
-    </script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/classes.js"></script>
+    <script src="js/index.js"></script>
 </body>
 </html>
