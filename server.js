@@ -44,7 +44,7 @@ const PORT = process.env.PORT || 3000;
 const serverState = {
   players: new Map(),     // Все подключенные игроки
   activeGames: new Map(), // Активные игры
-  characters: [           // ⚡ Добавлен список персонажей
+  characters: [           // Список персонажей
     {
       name: 'samurai',
       imageSrc: './img/samuraiMack/Idle.png',
@@ -64,7 +64,7 @@ const serverState = {
     playerSpeed: 5,
     jumpForce: -10,
     attackDamage: 20,
-    gameDuration: 60      // ⚡ Продолжительность игры в секундах
+    gameDuration: 60      // Продолжительность игры в секундах
   }
 };
 
@@ -72,17 +72,17 @@ const serverState = {
 const generateGameId = () => Math.random().toString(36).substr(2, 12);
 
 // Инициализация игрока
-const initPlayer = (socketId, username, isPlayer1, character) => ({ // ⚡ Добавлен параметр character
+const initPlayer = (socketId, username, isPlayer1, character) => ({
   id: socketId,
   username,
   position: { x: isPlayer1 ? 100 : 400, y: 0 },
   velocity: { x: 0, y: 0 },
   health: 100,
   isAttacking: false,
-  attackBox: character.attackBox, // ⚡ Используем атаку из характеристик персонажа
+  attackBox: character.attackBox,
   facingRight: isPlayer1,
   lastKey: '',
-  character               // ⚡ Сохраняем данные персонажа
+  character               // Сохраняем данные персонажа
 });
 
 // Проверка столкновений
@@ -133,7 +133,7 @@ io.on('connection', (socket) => {
       return;
     }
 
-    // ⚡ Случайный выбор персонажей
+    // Случайный выбор персонажей
     const availableChars = [...serverState.characters];
     const char1 = availableChars.splice(Math.floor(Math.random() * availableChars.length), 1)[0];
     const char2 = availableChars[0];
@@ -148,20 +148,27 @@ io.on('connection', (socket) => {
       intervalId: null
     };
 
+    // Обновление статусов игроков
     challenger.status = 'inGame';
     target.status = 'inGame';
     serverState.activeGames.set(gameId, newGame);
 
+    // Запуск игрового цикла
     newGame.intervalId = setInterval(() => gameLoop(gameId), 1000/60);
 
-    io.to(socket.id).socketsJoin(gameId);
-    io.to(targetId).socketsJoin(gameId);
+    // Присоединение к игровой комнате
+    socket.join(gameId);
+    socket.to(targetId).socketsJoin(gameId);
 
+    // Отправка начальных данных игры
     io.to(gameId).emit('gameStart', {
       gameId,
-      players: newGame.players
+      players: newGame.players,
+      characters: [char1, char2],
+      settings: serverState.settings
     });
 
+    // Обновление списка игроков
     io.emit('playerStatusChanged', { id: socket.id, status: 'inGame' });
     io.emit('playerStatusChanged', { id: targetId, status: 'inGame' });
   });
@@ -281,7 +288,7 @@ const gameLoop = (gameId) => {
     // Отправка состояния
     io.to(gameId).emit('gameStateUpdate', {
       players: game.players,
-      timeLeft: timeLeft.toFixed(1) // ⚡ Точное время с одним знаком после запятой
+      timeLeft: timeLeft.toFixed(1)
     });
   } catch (error) {
     console.error(`Ошибка игрового цикла: ${error}`);
@@ -325,6 +332,21 @@ const endGame = (gameId, reason) => {
     console.error(`Ошибка завершения игры: ${error}`);
   }
 };
+
+// Обработчики ошибок
+io.on('error', (error) => {
+  console.error('Socket error:', error);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+  server.close();
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
 
 server.listen(PORT, () => {
   console.log(`Сервер запущен на порту ${PORT}`);

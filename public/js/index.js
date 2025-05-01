@@ -25,8 +25,7 @@ const keys = {
     ' ': { pressed: false }
 };
 
-// ⚡ Удалены глобальные переменные timer и timerId
-
+// Инициализация игры
 registerBtn.addEventListener('click', () => {
     const username = usernameInput.value.trim();
     if (username) {
@@ -36,6 +35,7 @@ registerBtn.addEventListener('click', () => {
     }
 });
 
+// Обработчики сокетов
 socket.on('registrationSuccess', (data) => {
     playerId = data.id;
     playerUsername = data.username;
@@ -63,10 +63,14 @@ socket.on('challengeFailed', (message) => {
     alert(message);
 });
 
-// ⚡ Полностью переработан обработчик gameStart
 socket.on('gameStart', (gameData) => {
     lobbyContainer.style.display = 'none';
     gameContainer.style.display = 'inline-block';
+
+    // Сброс состояния игры
+    document.querySelector('#playerHealth').style.width = '100%';
+    document.querySelector('#enemyHealth').style.width = '100%';
+    document.querySelector('#displayText').style.display = 'none';
 
     // Инициализация фона
     background = new Sprite({
@@ -81,56 +85,12 @@ socket.on('gameStart', (gameData) => {
         framesMax: 6
     });
 
-    // Создание локального игрока
-    const playerData = gameData.players[playerId];
-    player = new Fighter({
-        position: playerData.position,
-        velocity: playerData.velocity,
-        offset: playerData.character.offset,
-        imageSrc: playerData.character.imageSrc,
-        framesMax: 8,
-        scale: 2.5,
-        sprites: {
-            idle: { imageSrc: './img/samuraiMack/Idle.png', framesMax: 8 },
-            run: { imageSrc: './img/samuraiMack/Run.png', framesMax: 8 },
-            jump: { imageSrc: './img/samuraiMack/Jump.png', framesMax: 2 },
-            fall: { imageSrc: './img/samuraiMack/Fall.png', framesMax: 2 },
-            attack1: { imageSrc: './img/samuraiMack/Attack1.png', framesMax: 6 },
-            takeHit: { imageSrc: './img/samuraiMack/Take Hit - white silhouette.png', framesMax: 4 },
-            death: { imageSrc: './img/samuraiMack/Death.png', framesMax: 6 }
-        },
-        attackBox: playerData.character.attackBox
-    });
-
-    player.id = playerId;
-    player.health = 100;
-
-    // Создание противника
+    // Получаем ID противника
     enemyId = Object.keys(gameData.players).find(id => id !== playerId);
-    const enemyData = gameData.players[enemyId];
     
-    enemy = new Fighter({
-        position: enemyData.position,
-        velocity: enemyData.velocity,
-        offset: enemyData.character.offset,
-        imageSrc: enemyData.character.imageSrc,
-        framesMax: 4,
-        scale: 2.5,
-        sprites: {
-            idle: { imageSrc: './img/kenji/Idle.png', framesMax: 4 },
-            run: { imageSrc: './img/kenji/Run.png', framesMax: 8 },
-            jump: { imageSrc: './img/kenji/Jump.png', framesMax: 2 },
-            fall: { imageSrc: './img/kenji/Fall.png', framesMax: 2 },
-            attack1: { imageSrc: './img/kenji/Attack1.png', framesMax: 4 },
-            takeHit: { imageSrc: './img/kenji/Take hit.png', framesMax: 3 },
-            death: { imageSrc: './img/kenji/Death.png', framesMax: 7 }
-        },
-        attackBox: enemyData.character.attackBox,
-        isEnemy: true
-    });
-    
-    enemy.id = enemyId;
-    enemy.health = 100;
+    // Создаем игроков
+    player = createFighter(playerId, gameData.players[playerId], false);
+    enemy = createFighter(enemyId, gameData.players[enemyId], true);
 
     if (!gameStarted) {
         animate();
@@ -138,16 +98,14 @@ socket.on('gameStart', (gameData) => {
     }
 });
 
-// ⚡ Новый обработчик обновления состояния игры
 socket.on('gameStateUpdate', (gameData) => {
-    // Обновление таймера
     document.querySelector('#timer').innerHTML = Math.floor(gameData.timeLeft);
     
-    // Синхронизация позиций противника
     if (enemy) {
         enemy.position = gameData.players[enemyId].position;
         enemy.velocity = gameData.players[enemyId].velocity;
         enemy.isAttacking = gameData.players[enemyId].isAttacking;
+        enemy.facingRight = gameData.players[enemyId].facingRight;
     }
 });
 
@@ -185,18 +143,94 @@ socket.on('gameOver', (result) => {
         player = null;
         enemy = null;
         enemyId = null;
-        gameStarted = false;
         displayText.style.display = 'none';
     }, 5000);
 });
 
-// Остальные функции UI остаются без изменений
-function updatePlayersList(players) { /* ... */ }
-function addPlayerToList(playerData) { /* ... */ }
-function updatePlayerStatus(playerId, status) { /* ... */ }
-function removePlayerFromList(playerId) { /* ... */ }
+// Функции для работы с лобби
+function updatePlayersList(players) {
+    playersContainer.innerHTML = '';
+    players.forEach(player => {
+        if (player.id !== playerId) {
+            addPlayerToList(player);
+        }
+    });
+}
 
-// ⚡ Обновленная функция анимации с deltaTime
+function addPlayerToList(playerData) {
+    const playerElement = document.createElement('div');
+    playerElement.className = `player-item ${playerData.status === 'inGame' ? 'in-game' : ''}`;
+    playerElement.innerHTML = `
+        <span>${playerData.username}</span>
+        <span class="player-status ${playerData.status === 'inGame' ? 'in-game' : ''}">
+            ${playerData.status === 'inGame' ? 'In Game' : 'Waiting'}
+        </span>
+    `;
+    
+    if (playerData.status === 'waiting') {
+        playerElement.addEventListener('click', () => {
+            socket.emit('challengePlayer', playerData.id);
+        });
+    }
+
+    playerElement.dataset.playerId = playerData.id;
+    playersContainer.appendChild(playerElement);
+}
+
+function updatePlayerStatus(playerId, status) {
+    const playerElement = document.querySelector(`[data-player-id="${playerId}"]`);
+    if (playerElement) {
+        playerElement.querySelector('.player-status').textContent = status === 'inGame' ? 'In Game' : 'Waiting';
+        playerElement.querySelector('.player-status').className = `player-status ${status === 'inGame' ? 'in-game' : ''}`;
+        playerElement.className = `player-item ${status === 'inGame' ? 'in-game' : ''}`;
+        
+        if (status === 'inGame') {
+            playerElement.onclick = null;
+        } else {
+            playerElement.addEventListener('click', () => {
+                socket.emit('challengePlayer', playerId);
+            });
+        }
+    }
+}
+
+function removePlayerFromList(playerId) {
+    const playerElement = document.querySelector(`[data-player-id="${playerId}"]`);
+    if (playerElement) {
+        playerElement.remove();
+    }
+}
+
+// Создание бойца
+function createFighter(id, data, isEnemy) {
+    return new Fighter({
+        position: data.position,
+        velocity: data.velocity,
+        offset: data.character.offset,
+        imageSrc: data.character.imageSrc,
+        framesMax: 8,
+        scale: 2.5,
+        sprites: getCharacterSprites(data.character.name),
+        attackBox: data.character.attackBox,
+        isEnemy: isEnemy
+    });
+}
+
+// Получение спрайтов персонажа
+function getCharacterSprites(name) {
+    const basePath = `./img/${name}/`;
+    return {
+        idle: { imageSrc: basePath + 'Idle.png', framesMax: 8 },
+        run: { imageSrc: basePath + 'Run.png', framesMax: 8 },
+        jump: { imageSrc: basePath + 'Jump.png', framesMax: 2 },
+        fall: { imageSrc: basePath + 'Fall.png', framesMax: 2 },
+        attack1: { imageSrc: basePath + 'Attack1.png', framesMax: 6 },
+        takeHit: { imageSrc: basePath + 'Take Hit.png', framesMax: 4 },
+        death: { imageSrc: basePath + 'Death.png', framesMax: 6 }
+    };
+}
+
+// Игровой цикл
 let lastTime = 0;
 function animate(timestamp) {
     const deltaTime = timestamp - lastTime;
@@ -215,6 +249,7 @@ function animate(timestamp) {
     if (player) {
         player.update(deltaTime);
         
+        // Отправка данных о движении на сервер
         socket.emit('movement', {
             position: player.position,
             velocity: player.velocity,
@@ -228,6 +263,7 @@ function animate(timestamp) {
         enemy.update(deltaTime);
     }
 
+    // Обработка управления
     if (player) {
         player.velocity.x = 0;
         
@@ -250,6 +286,7 @@ function animate(timestamp) {
         }
     }
 
+    // Проверка атаки
     if (player && enemy) {
         if (player.isAttacking && rectangularCollision({ rectangle1: player, rectangle2: enemy }) && player.framesCurrent === 4) {
             socket.emit('attack');
@@ -258,6 +295,7 @@ function animate(timestamp) {
     }
 }
 
+// Обработчики клавиатуры
 window.addEventListener('keydown', (event) => {
     if (!player || player.dead) return;
 

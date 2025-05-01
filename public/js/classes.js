@@ -5,7 +5,7 @@ class Sprite {
         scale = 1,
         framesMax = 1,
         offset = { x: 0, y: 0 },
-        animationSpeed = 100 // ⚡ Время в ms на кадр
+        animationSpeed = 100 // Время в ms на кадр
     }) {
         this.position = position;
         this.image = new Image();
@@ -17,7 +17,7 @@ class Sprite {
         this.width = 50;
         this.height = 150;
         
-        // ⚡ Параметры анимации
+        // Параметры анимации
         this.animationSpeed = animationSpeed;
         this.lastFrameUpdate = Date.now();
         this.lastUpdate = Date.now();
@@ -40,7 +40,7 @@ class Sprite {
         );
     }
 
-    // ⚡ Анимация на основе времени
+    // Анимация на основе времени
     animateFrames() {
         const now = Date.now();
         if (now - this.lastFrameUpdate > this.animationSpeed) {
@@ -96,7 +96,7 @@ class Fighter extends Sprite {
         this.dead = false;
         this.isEnemy = isEnemy;
 
-        // ⚡ Предзагрузка всех анимаций
+        // Предзагрузка всех анимаций
         for (const sprite in this.sprites) {
             this.sprites[sprite].image = new Image();
             this.sprites[sprite].image.src = this.sprites[sprite].imageSrc;
@@ -107,7 +107,7 @@ class Fighter extends Sprite {
         super.update(deltaTime);
         if (this.dead) return;
 
-        // ⚡ Физика с deltaTime
+        // Физика с deltaTime
         const timeFactor = deltaTime / 16.67; // Нормализация для 60 FPS
         this.position.x += this.velocity.x * timeFactor;
         this.position.y += this.velocity.y * timeFactor;
@@ -125,6 +125,17 @@ class Fighter extends Sprite {
         this.attackBox.position.x = this.position.x + 
             (this.isEnemy ? -this.attackBox.offset.x : this.attackBox.offset.x);
         this.attackBox.position.y = this.position.y + this.attackBox.offset.y;
+
+        // Рисование атак бокса (для отладки)
+        if (debug && this.attackBox.width) {
+            c.fillStyle = 'rgba(255, 0, 0, 0.5)';
+            c.fillRect(
+                this.attackBox.position.x,
+                this.attackBox.position.y,
+                this.attackBox.width,
+                this.attackBox.height
+            );
+        }
     }
 
     attack() {
@@ -145,7 +156,7 @@ class Fighter extends Sprite {
         }
     }
 
-    // ⚡ Улучшенная смена анимаций
+    // Улучшенная смена анимаций
     switchSprite(sprite) {
         if (this.image === this.sprites.death.image) {
             if (this.framesCurrent === this.sprites.death.framesMax - 1) {
