@@ -72,7 +72,7 @@ function loadImage(url) {
         const img = new Image();
         img.src = url;
         img.onload = () => resolve(img);
-        img.onerror = (err) => reject(err);
+        img.onerror = (err) => reject(new Error(`Ошибка загрузки изображения ${url}: ${err}`));
     });
 }
 
@@ -87,7 +87,13 @@ async function loadAllImages(sprites) {
         
         for (const sprite in sprites) {
             if (sprites[sprite].imageSrc) {
-                loadPromises.push(loadImage(sprites[sprite].imageSrc));
+                loadPromises.push(
+                    loadImage(sprites[sprite].imageSrc)
+                        .then(img => {
+                            sprites[sprite].image = img; // Сохраняем загруженное изображение
+                            return img;
+                        })
+                );
             }
         }
         
@@ -103,7 +109,10 @@ async function loadAllImages(sprites) {
  * Создание анимации пульсации (для таймера)
  */
 function createPulseAnimation() {
+    if (document.querySelector('style#pulse-animation')) return;
+    
     const style = document.createElement('style');
+    style.id = 'pulse-animation';
     style.innerHTML = `
         @keyframes pulse {
             0% { transform: scale(1); }
@@ -117,6 +126,7 @@ function createPulseAnimation() {
 // Инициализация анимации при загрузке
 createPulseAnimation();
 
+// Экспорт функций и переменных
 export {
     rectangularCollision,
     determineWinner,

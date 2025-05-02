@@ -1,3 +1,5 @@
+import { debug } from './utils.js';
+
 class Sprite {
     constructor({
         position,
@@ -5,7 +7,7 @@ class Sprite {
         scale = 1,
         framesMax = 1,
         offset = { x: 0, y: 0 },
-        animationSpeed = 100 // Время в ms на кадр
+        animationSpeed = 100
     }) {
         this.position = position;
         this.image = new Image();
@@ -24,7 +26,10 @@ class Sprite {
     }
 
     draw() {
-        if (!this.image.complete) return;
+        if (!this.image.complete) {
+            console.warn('Image not loaded:', this.image.src);
+            return;
+        }
         
         const frameWidth = this.image.width / this.framesMax;
         c.drawImage(
@@ -40,7 +45,6 @@ class Sprite {
         );
     }
 
-    // Анимация на основе времени
     animateFrames() {
         const now = Date.now();
         if (now - this.lastFrameUpdate > this.animationSpeed) {
@@ -156,7 +160,6 @@ class Fighter extends Sprite {
         }
     }
 
-    // Улучшенная смена анимаций
     switchSprite(sprite) {
         if (this.image === this.sprites.death.image) {
             if (this.framesCurrent === this.sprites.death.framesMax - 1) {
@@ -183,9 +186,16 @@ class Fighter extends Sprite {
     }
 
     overrideAnimation(sprite) {
+        if (!this.sprites[sprite]?.image) {
+            console.error('Sprite not found:', sprite);
+            return;
+        }
         this.image = this.sprites[sprite].image;
         this.framesMax = this.sprites[sprite].framesMax;
         this.framesCurrent = 0;
         this.animationSpeed = this.sprites[sprite].animationSpeed || 100;
     }
 }
+
+// Экспорт классов
+export { Sprite, Fighter };
