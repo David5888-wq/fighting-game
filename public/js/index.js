@@ -1,4 +1,4 @@
-import { debug } from './utils.js';
+import { debug, rectangularCollision } from './utils.js';
 
 const canvas = document.querySelector('canvas');
 const c = canvas.getContext('2d');
@@ -65,7 +65,7 @@ socket.on('challengeFailed', (message) => {
     alert(message);
 });
 
-socket.on('gameStart', (gameData) => {
+socket.on('gameStart', async (gameData) => {
     lobbyContainer.style.display = 'none';
     gameContainer.style.display = 'inline-block';
 
@@ -74,18 +74,8 @@ socket.on('gameStart', (gameData) => {
     document.querySelector('#enemyHealth').style.width = '100%';
     document.querySelector('#displayText').style.display = 'none';
 
-    // Инициализация фона
-    background = new Sprite({
-        position: { x: 0, y: 0 },
-        imageSrc: './img/background.png'
-    });
-
-    shop = new Sprite({
-        position: { x: 600, y: 128 },
-        imageSrc: './img/shop.png',
-        scale: 2.75,
-        framesMax: 6
-    });
+    // Загрузка изображений перед созданием игроков
+    await loadGameAssets(gameData);
 
     // Получаем ID противника
     enemyId = Object.keys(gameData.players).find(id => id !== playerId);
@@ -99,6 +89,57 @@ socket.on('gameStart', (gameData) => {
         gameStarted = true;
     }
 });
+
+async function loadGameAssets(gameData) {
+    // Загрузка фона и магазина
+    const bgImage = new Image();
+    bgImage.src = './img/background.png';
+    
+    const shopImage = new Image();
+    shopImage.src = './img/shop.png';
+
+    // Загрузка спрайтов игроков
+    const playerChar = gameData.players[playerId].character;
+    const enemyChar = gameData.players[enemyId].character;
+    
+    await Promise.all([
+        new Promise(resolve => bgImage.onload = resolve),
+        new Promise(resolve => shopImage.onload = resolve),
+        loadCharacterSprites(playerChar.name),
+        loadCharacterSprites(enemyChar.name)
+    ]);
+
+    // Инициализация фона
+    background = new Sprite({
+        position: { x: 0, y: 0 },
+        image: bgImage
+    });
+
+    shop = new Sprite({
+        position: { x: 600, y: 128 },
+        image: shopImage,
+        scale: 2.75,
+        framesMax: 6
+    });
+}
+
+async function loadCharacterSprites(characterName) {
+    const basePath = `./img/${characterName}/`;
+    const spriteFiles = [
+        'Idle.png', 'Run.png', 'Jump.png', 
+        'Fall.png', 'Attack1.png', 'Take Hit.png', 'Death.png'
+    ];
+    
+    const loadPromises = spriteFiles.map(file => {
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.src = basePath + file;
+            img.onload = () => resolve();
+        });
+    });
+
+    return Promise.all(loadPromises);
+}
 
 socket.on('gameStateUpdate', (gameData) => {
     document.querySelector('#timer').innerHTML = Math.floor(gameData.timeLeft);
@@ -145,7 +186,13 @@ socket.on('gameOver', (result) => {
         player = null;
         enemy = null;
         enemyId = null;
+        gameStarted = false;
         displayText.style.display = 'none';
+        
+        // Сброс элементов управления
+        usernameInput.disabled = false;
+        registerBtn.disabled = false;
+        registerBtn.textContent = 'Join Game';
     }, 5000);
 });
 
