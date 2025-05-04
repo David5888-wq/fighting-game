@@ -1,3 +1,5 @@
+import { debug } from './utils.js';
+
 const canvas = document.querySelector('canvas');
 const c = canvas.getContext('2d');
 const lobbyContainer = document.getElementById('lobby-container');
