@@ -9,10 +9,10 @@ const server = http.createServer(app);
 
 // Настройки CORS
 const allowedOrigins = [
-  'https://myfighting-game.ru',
-  'https://www.myfighting-game.ru',
   'http://localhost:3000',
-  'http://127.0.0.1:3000'
+  'http://127.0.0.1:3000',
+  'http://localhost:5500',
+  'http://127.0.0.1:5500'
 ];
 
 app.use(cors({
@@ -22,9 +22,6 @@ app.use(cors({
 }));
 
 app.use(express.static(path.join(__dirname, 'public')));
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
 
 // Конфигурация Socket.IO
 const io = socketIo(server, {
@@ -42,18 +39,18 @@ const PORT = process.env.PORT || 3000;
 
 // Состояние сервера
 const serverState = {
-  players: new Map(),     // Все подключенные игроки
-  activeGames: new Map(), // Активные игры
-  characters: [           // Список персонажей
+  players: new Map(),
+  activeGames: new Map(),
+  characters: [
     {
       name: 'samurai',
-      imageSrc: './img/samuraiMack/Idle.png',
+      imageSrc: '/img/samuraiMack/Idle.png',
       offset: { x: 215, y: 157 },
       attackBox: { offset: { x: 100, y: 50 }, width: 160, height: 50 }
     },
     {
       name: 'kenji',
-      imageSrc: './img/kenji/Idle.png',
+      imageSrc: '/img/kenji/Idle.png',
       offset: { x: 215, y: 167 },
       attackBox: { offset: { x: -170, y: 50 }, width: 170, height: 50 }
     }
@@ -64,12 +61,12 @@ const serverState = {
     playerSpeed: 5,
     jumpForce: -10,
     attackDamage: 20,
-    gameDuration: 60      // Продолжительность игры в секундах
+    gameDuration: 60
   }
 };
 
 // Генерация ID игры
-const generateGameId = () => Math.random().toString(36).substr(2, 12);
+const generateGameId = () => Math.random().toString(36).substr(2, 9);
 
 // Инициализация игрока
 const initPlayer = (socketId, username, isPlayer1, character) => ({
@@ -79,23 +76,30 @@ const initPlayer = (socketId, username, isPlayer1, character) => ({
   velocity: { x: 0, y: 0 },
   health: 100,
   isAttacking: false,
-  attackBox: character.attackBox,
   facingRight: isPlayer1,
   lastKey: '',
-  character               // Сохраняем данные персонажа
+  character,
+  attackBox: {
+    position: { x: 0, y: 0 },
+    offset: character.attackBox.offset,
+    width: character.attackBox.width,
+    height: character.attackBox.height
+  }
 });
 
 // Проверка столкновений
-const checkCollision = (attacker, target) => (
-  attacker.attackBox.x + attacker.attackBox.width >= target.position.x &&
-  attacker.attackBox.x <= target.position.x + 50 &&
-  attacker.attackBox.y + attacker.attackBox.height >= target.position.y &&
-  attacker.attackBox.y <= target.position.y + 150
-);
+const checkCollision = (attacker, target) => {
+  return (
+    attacker.attackBox.position.x + attacker.attackBox.width >= target.position.x &&
+    attacker.attackBox.position.x <= target.position.x + 50 &&
+    attacker.attackBox.position.y + attacker.attackBox.height >= target.position.y &&
+    attacker.attackBox.position.y <= target.position.y + 150
+  );
+};
 
 // Обработка подключений
 io.on('connection', (socket) => {
-  console.log(`Новое подключение: ${socket.id}`);
+  console.log(`New connection: ${socket.id}`);
 
   // Регистрация игрока
   socket.on('registerPlayer', (username) => {
@@ -129,7 +133,7 @@ io.on('connection', (socket) => {
     const target = serverState.players.get(targetId);
 
     if (!challenger || !target || target.status !== 'waiting') {
-      socket.emit('challengeFailed', 'Игрок недоступен');
+      socket.emit('challengeFailed', 'Player unavailable');
       return;
     }
 
@@ -164,7 +168,6 @@ io.on('connection', (socket) => {
     io.to(gameId).emit('gameStart', {
       gameId,
       players: newGame.players,
-      characters: [char1, char2],
       settings: serverState.settings
     });
 
@@ -175,71 +178,61 @@ io.on('connection', (socket) => {
 
   // Обработка движения
   socket.on('movement', (data) => {
-    try {
-      const gameEntry = Array.from(serverState.activeGames.entries())
-        .find(([_, game]) => game.players[socket.id]);
+    const gameEntry = Array.from(serverState.activeGames.entries())
+      .find(([_, game]) => game.players[socket.id]);
 
-      if (!gameEntry) return;
+    if (!gameEntry) return;
 
-      const [gameId, game] = gameEntry;
-      const player = game.players[socket.id];
+    const [gameId, game] = gameEntry;
+    const player = game.players[socket.id];
 
-      player.position = data.position;
-      player.facingRight = data.facingRight;
-      player.isAttacking = data.isAttacking;
+    player.position = data.position;
+    player.velocity = data.velocity;
+    player.facingRight = data.facingRight;
+    player.isAttacking = data.isAttacking;
+    player.lastKey = data.lastKey;
 
-      if (data.isAttacking) {
-        player.attackBox = {
-          x: player.position.x + (player.facingRight ? 50 : -100),
-          y: player.position.y + 30,
-          width: 100,
-          height: 50
-        };
-      }
+    // Обновление позиции атак бокса
+    player.attackBox.position.x = player.position.x + 
+      (player.facingRight ? player.attackBox.offset.x : -player.attackBox.offset.x);
+    player.attackBox.position.y = player.position.y + player.attackBox.offset.y;
 
-      io.to(gameId).emit('playerUpdate', {
-        playerId: socket.id,
-        ...player
-      });
-    } catch (error) {
-      console.error(`Ошибка обработки движения: ${error}`);
-    }
+    io.to(gameId).emit('gameStateUpdate', {
+      players: game.players,
+      timeLeft: Math.max(0, serverState.settings.gameDuration - (Date.now() - game.startTime) / 1000)
+    });
   });
 
   // Обработка атаки
   socket.on('attack', () => {
-    try {
-      const gameEntry = Array.from(serverState.activeGames.entries())
-        .find(([_, game]) => game.players[socket.id]);
+    const gameEntry = Array.from(serverState.activeGames.entries())
+      .find(([_, game]) => game.players[socket.id]);
 
-      if (!gameEntry) return;
+    if (!gameEntry) return;
 
-      const [gameId, game] = gameEntry;
-      const attacker = game.players[socket.id];
-      const opponentId = Object.keys(game.players).find(id => id !== socket.id);
-      const opponent = game.players[opponentId];
+    const [gameId, game] = gameEntry;
+    const attacker = game.players[socket.id];
+    const opponentId = Object.keys(game.players).find(id => id !== socket.id);
+    const opponent = game.players[opponentId];
 
-      if (checkCollision(attacker, opponent)) {
-        opponent.health = Math.max(0, opponent.health - serverState.settings.attackDamage);
+    if (checkCollision(attacker, opponent)) {
+      opponent.health = Math.max(0, opponent.health - serverState.settings.attackDamage);
 
-        io.to(gameId).emit('hit', {
-          targetId: opponentId,
-          health: opponent.health,
-          attackerId: socket.id
-        });
+      io.to(gameId).emit('hit', {
+        targetId: opponentId,
+        health: opponent.health,
+        attackerId: socket.id
+      });
 
-        if (opponent.health <= 0) {
-          endGame(gameId, socket.id);
-        }
+      if (opponent.health <= 0) {
+        endGame(gameId, socket.id);
       }
-    } catch (error) {
-      console.error(`Ошибка обработки атаки: ${error}`);
     }
   });
 
   // Отключение
   socket.on('disconnect', () => {
-    console.log(`Отключение: ${socket.id}`);
+    console.log(`Disconnected: ${socket.id}`);
     const player = serverState.players.get(socket.id);
     
     if (player) {
@@ -259,89 +252,78 @@ io.on('connection', (socket) => {
 
 // Игровой цикл
 const gameLoop = (gameId) => {
-  try {
-    const game = serverState.activeGames.get(gameId);
-    if (!game) return;
+  const game = serverState.activeGames.get(gameId);
+  if (!game) return;
 
-    // Расчет времени
-    const elapsed = (Date.now() - game.startTime) / 1000;
-    const timeLeft = Math.max(0, serverState.settings.gameDuration - elapsed);
+  // Расчет времени
+  const elapsed = (Date.now() - game.startTime) / 1000;
+  const timeLeft = Math.max(0, serverState.settings.gameDuration - elapsed);
 
-    // Проверка таймера
-    if (timeLeft <= 0) {
-      endGame(gameId, 'timeout');
-      return;
-    }
-
-    // Физика
-    Object.values(game.players).forEach(player => {
-      player.velocity.y += serverState.settings.gravity;
-      player.position.x += player.velocity.x * serverState.settings.playerSpeed;
-      player.position.y += player.velocity.y;
-
-      if (player.position.y > serverState.settings.floorLevel) {
-        player.position.y = serverState.settings.floorLevel;
-        player.velocity.y = 0;
-      }
-    });
-
-    // Отправка состояния
-    io.to(gameId).emit('gameStateUpdate', {
-      players: game.players,
-      timeLeft: timeLeft.toFixed(1)
-    });
-  } catch (error) {
-    console.error(`Ошибка игрового цикла: ${error}`);
-    endGame(gameId, 'server_error');
+  // Проверка таймера
+  if (timeLeft <= 0) {
+    endGame(gameId, 'timeout');
+    return;
   }
+
+  // Физика
+  Object.values(game.players).forEach(player => {
+    player.velocity.y += serverState.settings.gravity;
+    player.position.y += player.velocity.y;
+
+    // Ограничение по земле
+    if (player.position.y > serverState.settings.floorLevel) {
+      player.position.y = serverState.settings.floorLevel;
+      player.velocity.y = 0;
+    }
+  });
+
+  // Отправка состояния
+  io.to(gameId).emit('gameStateUpdate', {
+    players: game.players,
+    timeLeft: timeLeft.toFixed(1)
+  });
 };
 
 // Завершение игры
 const endGame = (gameId, reason) => {
-  try {
-    const game = serverState.activeGames.get(gameId);
-    if (!game) return;
+  const game = serverState.activeGames.get(gameId);
+  if (!game) return;
 
-    clearInterval(game.intervalId);
-    
-    let winnerId = null;
-    if (typeof reason === 'string') {
-      const players = Object.keys(game.players);
-      if (players.length === 2) winnerId = players.find(id => id !== reason);
-    } else {
-      winnerId = reason;
-    }
-
-    io.to(gameId).emit('gameOver', {
-      reason: reason === 'timeout' ? 'Время вышло!' : 
-             (reason === 'disconnect' ? 'Игрок отключился' : 'Ошибка сервера'),
-      winner: winnerId
-    });
-
-    Object.keys(game.players).forEach(playerId => {
-      const player = serverState.players.get(playerId);
-      if (player) {
-        player.status = 'waiting';
-        io.emit('playerStatusChanged', { id: playerId, status: 'waiting' });
-      }
-    });
-
-    serverState.activeGames.delete(gameId);
-    io.in(gameId).socketsLeave(gameId);
-  } catch (error) {
-    console.error(`Ошибка завершения игры: ${error}`);
+  clearInterval(game.intervalId);
+  
+  let winnerId = null;
+  if (typeof reason === 'string') {
+    const players = Object.keys(game.players);
+    if (players.length === 2) winnerId = players.find(id => id !== reason);
+  } else {
+    winnerId = reason;
   }
+
+  io.to(gameId).emit('gameOver', {
+    reason: reason === 'timeout' ? 'Time is up!' : 
+           (reason === 'disconnect' ? 'Player disconnected' : 'Server error'),
+    winner: winnerId
+  });
+
+  Object.keys(game.players).forEach(playerId => {
+    const player = serverState.players.get(playerId);
+    if (player) {
+      player.status = 'waiting';
+      io.emit('playerStatusChanged', { id: playerId, status: 'waiting' });
+    }
+  });
+
+  serverState.activeGames.delete(gameId);
+  io.in(gameId).socketsLeave(gameId);
 };
 
 // Обработчики ошибок
-io.on('error', (error) => {
-  console.error('Socket error:', error);
+server.on('error', (error) => {
+  console.error('Server error:', error);
 });
 
 process.on('uncaughtException', (err) => {
   console.error('Uncaught Exception:', err);
-  server.close();
-  process.exit(1);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
@@ -349,5 +331,5 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`Сервер запущен на порту ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
