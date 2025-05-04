@@ -1,3 +1,5 @@
+import { debug, rectangularCollision } from './utils.js';
+
 class Sprite {
     constructor({
         position,
@@ -5,27 +7,32 @@ class Sprite {
         scale = 1,
         framesMax = 1,
         offset = { x: 0, y: 0 },
-        animationSpeed = 100 // Время в ms на кадр
+        animationSpeed = 100
     }) {
         this.position = position;
+        this.width = 50;
+        this.height = 150;
         this.image = new Image();
         this.image.src = imageSrc;
         this.scale = scale;
         this.framesMax = framesMax;
         this.framesCurrent = 0;
         this.offset = offset;
-        this.width = 50;
-        this.height = 150;
-        
-        // Параметры анимации
         this.animationSpeed = animationSpeed;
         this.lastFrameUpdate = Date.now();
         this.lastUpdate = Date.now();
+
+        // Обработка ошибок загрузки изображения
+        this.image.onerror = () => {
+            console.error('Failed to load image:', imageSrc);
+            // Можно установить изображение-заглушку
+            this.image.src = '/img/placeholder.png';
+        };
     }
 
     draw() {
-        if (!this.image.complete) return;
-        
+        if (!this.image) return;
+
         const frameWidth = this.image.width / this.framesMax;
         c.drawImage(
             this.image,
@@ -40,7 +47,6 @@ class Sprite {
         );
     }
 
-    // Анимация на основе времени
     animateFrames() {
         const now = Date.now();
         if (now - this.lastFrameUpdate > this.animationSpeed) {
@@ -59,7 +65,6 @@ class Fighter extends Sprite {
     constructor({
         position,
         velocity = { x: 0, y: 0 },
-        color = 'red',
         imageSrc,
         scale = 1,
         framesMax = 1,
@@ -89,17 +94,20 @@ class Fighter extends Sprite {
             width: attackBox.width,
             height: attackBox.height
         };
-        this.color = color;
         this.isAttacking = false;
         this.health = 100;
         this.sprites = sprites;
         this.dead = false;
         this.isEnemy = isEnemy;
+        this.facingRight = !isEnemy;
 
         // Предзагрузка всех анимаций
         for (const sprite in this.sprites) {
             this.sprites[sprite].image = new Image();
             this.sprites[sprite].image.src = this.sprites[sprite].imageSrc;
+            this.sprites[sprite].image.onerror = () => {
+                console.error('Failed to load sprite:', this.sprites[sprite].imageSrc);
+            };
         }
     }
 
@@ -123,7 +131,7 @@ class Fighter extends Sprite {
 
         // Обновление атак бокса
         this.attackBox.position.x = this.position.x + 
-            (this.isEnemy ? -this.attackBox.offset.x : this.attackBox.offset.x);
+            (this.facingRight ? this.attackBox.offset.x : -this.attackBox.offset.x);
         this.attackBox.position.y = this.position.y + this.attackBox.offset.y;
 
         // Рисование атак бокса (для отладки)
@@ -156,7 +164,6 @@ class Fighter extends Sprite {
         }
     }
 
-    // Улучшенная смена анимаций
     switchSprite(sprite) {
         if (this.image === this.sprites.death.image) {
             if (this.framesCurrent === this.sprites.death.framesMax - 1) {
