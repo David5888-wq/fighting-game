@@ -249,14 +249,14 @@ function animate(timestamp) {
     c.fillStyle = 'black';
     c.fillRect(0, 0, canvas.width, canvas.height);
     
-    background.update(deltaTime);
-    shop.update(deltaTime);
+    background.update(deltaTime, c);
+    shop.update(deltaTime, c);
     
     c.fillStyle = 'rgba(255, 255, 255, 0.15)';
     c.fillRect(0, 0, canvas.width, canvas.height);
     
     if (player) {
-        player.update(deltaTime);
+        if (player) player.update(deltaTime, c);
         
         // Отправка данных о движении на сервер
         socket.emit('movement', {
@@ -269,7 +269,7 @@ function animate(timestamp) {
     }
     
     if (enemy) {
-        enemy.update(deltaTime);
+        if (enemy) enemy.update(deltaTime, c);
     }
 
     // Обработка управления

@@ -33,11 +33,9 @@ class Sprite {
         this.lastUpdate = Date.now();
     }
 
-    draw() {
+    ddraw(c) {
         if (!this.loaded) return;
-
         const frameWidth = this.image.width / this.framesMax;
-        // c — глобальная переменная canvas context, должна быть определена в index.js
         c.drawImage(
             this.image,
             this.framesCurrent * frameWidth,
@@ -50,6 +48,16 @@ class Sprite {
             this.image.height * this.scale
         );
     }
+    
+    update(deltaTime, c) {
+        this.draw(c);
+        this.animateFrames();
+    }
+
+update(deltaTime, c) {
+    this.draw(c);
+    this.animateFrames();
+}
 
     // Анимация на основе времени
     animateFrames() {
@@ -123,7 +131,7 @@ class Fighter extends Sprite {
     }
 
     update(deltaTime) {
-        super.update(deltaTime);
+        super.update(deltaTime, c);
         if (this.dead) return;
 
         // Физика с deltaTime
