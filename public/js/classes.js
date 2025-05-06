@@ -1,3 +1,5 @@
+var debug = window.debug !== undefined ? window.debug : false;
+
 class Sprite {
     constructor({
         position,
