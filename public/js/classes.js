@@ -1,4 +1,4 @@
-var debug = window.debug !== undefined ? window.debug : false;
+import { debug } from './utils.js';
 
 class Sprite {
     constructor({
@@ -12,13 +12,21 @@ class Sprite {
         this.position = position;
         this.image = new Image();
         this.image.src = imageSrc;
+        this.loaded = false;
+        this.image.onload = () => {
+            this.loaded = true;
+        };
+        this.image.onerror = (e) => {
+            console.error('Ошибка загрузки изображения:', imageSrc, e);
+            this.loaded = false;
+        };
         this.scale = scale;
         this.framesMax = framesMax;
         this.framesCurrent = 0;
         this.offset = offset;
         this.width = 50;
         this.height = 150;
-        
+
         // Параметры анимации
         this.animationSpeed = animationSpeed;
         this.lastFrameUpdate = Date.now();
@@ -26,9 +34,10 @@ class Sprite {
     }
 
     draw() {
-        if (!this.image.complete) return;
-        
+        if (!this.loaded) return;
+
         const frameWidth = this.image.width / this.framesMax;
+        // c — глобальная переменная canvas context, должна быть определена в index.js
         c.drawImage(
             this.image,
             this.framesCurrent * frameWidth,
@@ -102,6 +111,14 @@ class Fighter extends Sprite {
         for (const sprite in this.sprites) {
             this.sprites[sprite].image = new Image();
             this.sprites[sprite].image.src = this.sprites[sprite].imageSrc;
+            this.sprites[sprite].loaded = false;
+            this.sprites[sprite].image.onload = () => {
+                this.sprites[sprite].loaded = true;
+            };
+            this.sprites[sprite].image.onerror = (e) => {
+                console.error('Ошибка загрузки изображения:', this.sprites[sprite].imageSrc, e);
+                this.sprites[sprite].loaded = false;
+            };
         }
     }
 
@@ -124,7 +141,7 @@ class Fighter extends Sprite {
         }
 
         // Обновление атак бокса
-        this.attackBox.position.x = this.position.x + 
+        this.attackBox.position.x = this.position.x +
             (this.isEnemy ? -this.attackBox.offset.x : this.attackBox.offset.x);
         this.attackBox.position.y = this.position.y + this.attackBox.offset.y;
 
@@ -148,7 +165,7 @@ class Fighter extends Sprite {
 
     takeHit() {
         if (this.dead) return;
-        
+
         this.health -= 20;
         this.switchSprite('takeHit');
 
@@ -175,10 +192,10 @@ class Fighter extends Sprite {
         }
 
         if (
-            (this.image === this.sprites.attack1.image && 
-             this.framesCurrent < this.sprites.attack1.framesMax - 1) ||
-            (this.image === this.sprites.takeHit.image && 
-             this.framesCurrent < this.sprites.takeHit.framesMax - 1)
+            (this.image === this.sprites.attack1.image &&
+                this.framesCurrent < this.sprites.attack1.framesMax - 1) ||
+            (this.image === this.sprites.takeHit.image &&
+                this.framesCurrent < this.sprites.takeHit.framesMax - 1)
         ) return;
 
         this.overrideAnimation(sprite);
@@ -191,3 +208,5 @@ class Fighter extends Sprite {
         this.animationSpeed = this.sprites[sprite].animationSpeed || 100;
     }
 }
+
+export { Sprite, Fighter };

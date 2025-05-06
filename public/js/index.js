@@ -1,3 +1,6 @@
+import { rectangularCollision, determineWinner, updateTimer, loadImage, loadAllImages, debug } from './utils.js';
+import { Fighter, Sprite } from './classes.js';
+
 const canvas = document.querySelector('canvas');
 const c = canvas.getContext('2d');
 const lobbyContainer = document.getElementById('lobby-container');
@@ -225,8 +228,13 @@ function getCharacterSprites(name) {
         jump: { imageSrc: basePath + 'Jump.png', framesMax: 2 },
         fall: { imageSrc: basePath + 'Fall.png', framesMax: 2 },
         attack1: { imageSrc: basePath + 'Attack1.png', framesMax: 6 },
-        attack2: { imageSrc: basePath + 'Attack2.png', framesMax: 6 }, // если используешь
-        takeHit: { imageSrc: basePath + 'Take hit.png', framesMax: 4 }, // для kenji: 'Take hit.png', для samuraiMack: 'Take Hit.png'
+        attack2: { imageSrc: basePath + 'Attack2.png', framesMax: 6 },
+        takeHit: { 
+            imageSrc: name === 'kenji' 
+                ? basePath + 'Take hit.png' 
+                : basePath + 'Take Hit.png', 
+            framesMax: 4 
+        },
         death: { imageSrc: basePath + 'Death.png', framesMax: 6 }
     };
 }
