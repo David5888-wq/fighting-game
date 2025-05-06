@@ -35,34 +35,6 @@ registerBtn.addEventListener('click', () => {
     }
 });
 
-// Обработчики сокетов
-socket.on('registrationSuccess', (data) => {
-    playerId = data.id;
-    playerUsername = data.username;
-    
-    usernameInput.disabled = true;
-    registerBtn.disabled = true;
-    registerBtn.textContent = 'Waiting for opponent...';
-    
-    updatePlayersList(data.players);
-});
-
-socket.on('playerJoined', (playerData) => {
-    addPlayerToList(playerData);
-});
-
-socket.on('playerStatusChanged', (data) => {
-    updatePlayerStatus(data.id, data.status);
-});
-
-socket.on('playerLeft', (playerId) => {
-    removePlayerFromList(playerId);
-});
-
-socket.on('challengeFailed', (message) => {
-    alert(message);
-});
-
 socket.on('gameStart', (gameData) => {
     lobbyContainer.style.display = 'none';
     gameContainer.style.display = 'inline-block';
@@ -125,89 +97,13 @@ socket.on('hit', (healthData) => {
     }
 });
 
-socket.on('gameOver', (result) => {
-    const displayText = document.querySelector('#displayText');
-    displayText.style.display = 'flex';
-    
-    if (result.winner === playerId) {
-        displayText.textContent = 'You Win!';
-    } else if (result.winner === enemyId) {
-        displayText.textContent = 'You Lose!';
-    } else {
-        displayText.textContent = result.reason;
-    }
-    
-    setTimeout(() => {
-        gameContainer.style.display = 'none';
-        lobbyContainer.style.display = 'block';
-        player = null;
-        enemy = null;
-        enemyId = null;
-        displayText.style.display = 'none';
-    }, 5000);
-});
-
-// Функции для работы с лобби
-function updatePlayersList(players) {
-    playersContainer.innerHTML = '';
-    players.forEach(player => {
-        if (player.id !== playerId) {
-            addPlayerToList(player);
-        }
-    });
-}
-
-function addPlayerToList(playerData) {
-    const playerElement = document.createElement('div');
-    playerElement.className = `player-item ${playerData.status === 'inGame' ? 'in-game' : ''}`;
-    playerElement.innerHTML = `
-        <span>${playerData.username}</span>
-        <span class="player-status ${playerData.status === 'inGame' ? 'in-game' : ''}">
-            ${playerData.status === 'inGame' ? 'In Game' : 'Waiting'}
-        </span>
-    `;
-    
-    if (playerData.status === 'waiting') {
-        playerElement.addEventListener('click', () => {
-            socket.emit('challengePlayer', playerData.id);
-        });
-    }
-
-    playerElement.dataset.playerId = playerData.id;
-    playersContainer.appendChild(playerElement);
-}
-
-function updatePlayerStatus(playerId, status) {
-    const playerElement = document.querySelector(`[data-player-id="${playerId}"]`);
-    if (playerElement) {
-        playerElement.querySelector('.player-status').textContent = status === 'inGame' ? 'In Game' : 'Waiting';
-        playerElement.querySelector('.player-status').className = `player-status ${status === 'inGame' ? 'in-game' : ''}`;
-        playerElement.className = `player-item ${status === 'inGame' ? 'in-game' : ''}`;
-        
-        if (status === 'inGame') {
-            playerElement.onclick = null;
-        } else {
-            playerElement.addEventListener('click', () => {
-                socket.emit('challengePlayer', playerId);
-            });
-        }
-    }
-}
-
-function removePlayerFromList(playerId) {
-    const playerElement = document.querySelector(`[data-player-id="${playerId}"]`);
-    if (playerElement) {
-        playerElement.remove();
-    }
-}
-
 // Создание бойца
 function createFighter(id, data, isEnemy) {
     return new Fighter({
         position: data.position,
         velocity: data.velocity,
         offset: data.character.offset,
-        imageSrc: data.character.imageSrc,
+        imageSrc: data.character.imageSrc, // например: './img/samuraiMack/Idle.png'
         framesMax: 8,
         scale: 2.5,
         sprites: getCharacterSprites(data.character.name),
@@ -225,7 +121,8 @@ function getCharacterSprites(name) {
         jump: { imageSrc: basePath + 'Jump.png', framesMax: 2 },
         fall: { imageSrc: basePath + 'Fall.png', framesMax: 2 },
         attack1: { imageSrc: basePath + 'Attack1.png', framesMax: 6 },
-        takeHit: { imageSrc: basePath + 'Take Hit.png', framesMax: 4 },
+        attack2: { imageSrc: basePath + 'Attack2.png', framesMax: 6 }, // если используешь
+        takeHit: { imageSrc: basePath + 'Take hit.png', framesMax: 4 }, // для kenji: 'Take hit.png', для samuraiMack: 'Take Hit.png'
         death: { imageSrc: basePath + 'Death.png', framesMax: 6 }
     };
 }
@@ -327,6 +224,12 @@ window.addEventListener('keyup', (event) => {
             break;
         case 'd':
             keys.d.pressed = false;
+            break;
+        case 'w':
+            keys.w.pressed = false;
+            break;
+        case ' ':
+            keys[' '].pressed = false;
             break;
     }
 });
