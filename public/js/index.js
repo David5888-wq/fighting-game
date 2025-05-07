@@ -219,15 +219,38 @@ function createFighter(id, data, isEnemy) {
 // Получение спрайтов персонажа
 function getCharacterSprites(name) {
     const basePath = `./img/${name}/`;
-    return {
-        idle: { imageSrc: basePath + 'Idle.png', framesMax: 8 },
-        run: { imageSrc: basePath + 'Run.png', framesMax: 8 },
-        jump: { imageSrc: basePath + 'Jump.png', framesMax: 2 },
-        fall: { imageSrc: basePath + 'Fall.png', framesMax: 2 },
-        attack1: { imageSrc: basePath + 'Attack1.png', framesMax: 6 },
-        takeHit: { imageSrc: basePath + 'Take Hit.png', framesMax: 4 },
-        death: { imageSrc: basePath + 'Death.png', framesMax: 6 }
-    };
+    if (name === 'kenji') {
+        return {
+            idle: { imageSrc: basePath + 'Idle.png', framesMax: 8 },
+            run: { imageSrc: basePath + 'Run.png', framesMax: 8 },
+            jump: { imageSrc: basePath + 'Jump.png', framesMax: 2 },
+            fall: { imageSrc: basePath + 'Fall.png', framesMax: 2 },
+            attack1: { imageSrc: basePath + 'Attack1.png', framesMax: 6 },
+            takeHit: { imageSrc: basePath + 'Take hit.png', framesMax: 4 },
+            death: { imageSrc: basePath + 'Death.png', framesMax: 6 }
+        };
+    } else if (name === 'samuraiMack') {
+        return {
+            idle: { imageSrc: basePath + 'Idle.png', framesMax: 8 },
+            run: { imageSrc: basePath + 'Run.png', framesMax: 8 },
+            jump: { imageSrc: basePath + 'Jump.png', framesMax: 2 },
+            fall: { imageSrc: basePath + 'Fall.png', framesMax: 2 },
+            attack1: { imageSrc: basePath + 'Attack1.png', framesMax: 6 },
+            takeHit: { imageSrc: basePath + 'Take Hit.png', framesMax: 4 },
+            death: { imageSrc: basePath + 'Death.png', framesMax: 6 }
+        };
+    } else {
+        // Фолбэк на стандартные имена
+        return {
+            idle: { imageSrc: basePath + 'Idle.png', framesMax: 8 },
+            run: { imageSrc: basePath + 'Run.png', framesMax: 8 },
+            jump: { imageSrc: basePath + 'Jump.png', framesMax: 2 },
+            fall: { imageSrc: basePath + 'Fall.png', framesMax: 2 },
+            attack1: { imageSrc: basePath + 'Attack1.png', framesMax: 6 },
+            takeHit: { imageSrc: basePath + 'Take Hit.png', framesMax: 4 },
+            death: { imageSrc: basePath + 'Death.png', framesMax: 6 }
+        };
+    }
 }
 
 // Игровой цикл
