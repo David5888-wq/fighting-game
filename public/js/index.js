@@ -1,6 +1,3 @@
-import { rectangularCollision, determineWinner, updateTimer, loadImage, loadAllImages, debug } from './utils.js';
-import { Fighter, Sprite } from './classes.js';
-
 const canvas = document.querySelector('canvas');
 const c = canvas.getContext('2d');
 const lobbyContainer = document.getElementById('lobby-container');
@@ -228,13 +225,7 @@ function getCharacterSprites(name) {
         jump: { imageSrc: basePath + 'Jump.png', framesMax: 2 },
         fall: { imageSrc: basePath + 'Fall.png', framesMax: 2 },
         attack1: { imageSrc: basePath + 'Attack1.png', framesMax: 6 },
-        attack2: { imageSrc: basePath + 'Attack2.png', framesMax: 6 },
-        takeHit: { 
-            imageSrc: name === 'kenji' 
-                ? basePath + 'Take hit.png' 
-                : basePath + 'Take Hit.png', 
-            framesMax: 4 
-        },
+        takeHit: { imageSrc: basePath + 'Take Hit.png', framesMax: 4 },
         death: { imageSrc: basePath + 'Death.png', framesMax: 6 }
     };
 }
@@ -249,14 +240,14 @@ function animate(timestamp) {
     c.fillStyle = 'black';
     c.fillRect(0, 0, canvas.width, canvas.height);
     
-    background.update(deltaTime, c);
-    shop.update(deltaTime, c);
+    background.update(deltaTime);
+    shop.update(deltaTime);
     
     c.fillStyle = 'rgba(255, 255, 255, 0.15)';
     c.fillRect(0, 0, canvas.width, canvas.height);
     
     if (player) {
-        if (player) player.update(deltaTime, c);
+        player.update(deltaTime);
         
         // Отправка данных о движении на сервер
         socket.emit('movement', {
@@ -269,7 +260,7 @@ function animate(timestamp) {
     }
     
     if (enemy) {
-        if (enemy) enemy.update(deltaTime, c);
+        enemy.update(deltaTime);
     }
 
     // Обработка управления
