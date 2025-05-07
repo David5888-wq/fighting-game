@@ -1,3 +1,6 @@
+// Добавляю определение debug, если оно не определено
+const debug = typeof window !== 'undefined' && window.debug !== undefined ? window.debug : false;
+
 class Sprite {
     constructor({
         position,
