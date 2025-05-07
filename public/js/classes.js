@@ -1,5 +1,3 @@
-import { debug } from './utils.js';
-
 class Sprite {
     constructor({
         position,
