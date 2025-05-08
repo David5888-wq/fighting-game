@@ -1,81 +1,235 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fighting Game - Лобби</title>
+    <title>Fighting Game</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <style>
-        body {
-            font-family: Arial, sans-serif;
+        * {
+            box-sizing: border-box;
             margin: 0;
-            padding: 20px;
-            background-color: #1a1a1a;
-            color: #fff;
+            padding: 0;
+            font-family: "Press Start 2P", cursive;
+        }
+        
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #111;
+            overflow: hidden;
         }
 
         #loginScreen {
-            max-width: 400px;
-            margin: 100px auto;
-            text-align: center;
-        }
-
-        #lobbyScreen {
-            display: none;
-            max-width: 800px;
-            margin: 0 auto;
-        }
-
-        .player-item {
-            background-color: #2a2a2a;
-            padding: 15px;
-            margin: 10px 0;
-            border-radius: 5px;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
             display: flex;
-            justify-content: space-between;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background-color: rgba(0, 0, 0, 0.9);
+            z-index: 100;
+        }
+
+        #loginForm {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
             align-items: center;
         }
 
-        button {
-            background-color: #4CAF50;
+        #nicknameInput {
+            padding: 10px;
+            font-size: 16px;
+            width: 300px;
+            background-color: #333;
+            color: white;
+            border: 2px solid #666;
+            border-radius: 5px;
+        }
+
+        #loginButton {
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #818cf8;
             color: white;
             border: none;
-            padding: 10px 20px;
             border-radius: 5px;
             cursor: pointer;
+            transition: background-color 0.3s;
         }
 
-        button:hover {
-            background-color: #45a049;
+        #loginButton:hover {
+            background-color: #6366f1;
         }
 
-        input {
-            padding: 10px;
-            margin: 10px 0;
+        #lobbyScreen {
+            position: fixed;
+            top: 0;
+            left: 0;
             width: 100%;
-            border: none;
-            border-radius: 5px;
+            height: 100%;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background-color: rgba(0, 0, 0, 0.9);
+            z-index: 90;
         }
 
-        h1 {
-            color: #4CAF50;
+        #waitingPlayers {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .player-item {
+            padding: 10px 20px;
+            background-color: #333;
+            color: white;
+            border: 2px solid #666;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .player-item:hover {
+            background-color: #444;
+        }
+        
+        .game-container {
+            position: relative;
+            display: none;
+            inline-block;
+        }
+        
+        .game-ui {
+            position: absolute;
+            display: flex;
+            width: 100%;
+            align-items: center;
+            padding: 20px;
+            z-index: 10;
+        }
+        
+        .health-bar-container {
+            position: relative;
+            width: 100%;
+            height: 30px;
+            border: 4px solid white;
+        }
+        
+        .health-bar-background {
+            background-color: red;
+            height: 100%;
+            width: 100%;
+        }
+        
+        #playerHealth {
+            position: absolute;
+            background: #818cf8;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            width: 100%;
+        }
+        
+        #enemyHealth {
+            position: absolute;
+            background: #818cf8;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            left: 0;
+        }
+        
+        #timer {
+            background-color: black;
+            height: 50px;
+            width: 100px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            border: 4px solid white;
+        }
+        
+        #displayText {
+            position: absolute;
+            color: white;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            left: 0;
+            font-size: 48px;
+            z-index: 20;
+        }
+        
+        canvas {
+            border: 4px solid #333;
+        }
+
+        body::after {
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: url('img/12.png') no-repeat center center;
+            background-size: cover;
+            z-index: -1;
         }
     </style>
 </head>
 <body>
     <div id="loginScreen">
-        <h1>Добро пожаловать в Fighting Game!</h1>
-        <form id="loginForm">
-            <input type="text" id="username" placeholder="Введите ваш никнейм" required>
-            <button type="submit">Войти</button>
-        </form>
+        <div id="loginForm">
+            <h2 style="color: white; margin-bottom: 20px;">Введите ваш никнейм</h2>
+            <input type="text" id="nicknameInput" placeholder="Никнейм">
+            <button id="loginButton">Войти</button>
+        </div>
     </div>
 
     <div id="lobbyScreen">
-        <h1>Лобби</h1>
-        <div id="playersList"></div>
+        <h2 style="color: white; margin-bottom: 20px;">Ожидающие игроки</h2>
+        <div id="waitingPlayers"></div>
     </div>
 
-    <script src="/socket.io/socket.io.js"></script>
-    <script src="js/lobby.js"></script>
+    <div class="game-container">
+        <div class="game-ui">
+            <div class="health-bar-container" style="border-right: none;">
+                <div class="health-bar-background"></div>
+                <div id="playerHealth"></div>
+            </div>
+            
+            <div id="timer">60</div>
+            
+            <div class="health-bar-container" style="border-left: none;">
+                <div class="health-bar-background"></div>
+                <div id="enemyHealth"></div>
+            </div>
+        </div>
+        
+        <div id="displayText">Tie</div>
+        <canvas width="1024" height="576"></canvas>
+    </div>
+
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/classes.js"></script>
+    <script src="js/index.js"></script>
 </body>
 </html>
