@@ -98,7 +98,8 @@ function initGame() {
             x: 0,
             y: 0
         },
-        imageSrc: './img/background.png'
+        imageSrc: './img/background.png',
+        ctx
     });
     
     shop = new Sprite({
@@ -108,7 +109,8 @@ function initGame() {
         },
         imageSrc: './img/shop.png',
         scale: 2.75,
-        framesMax: 6
+        framesMax: 6,
+        ctx
     });
     
     player = new Fighter({
@@ -131,6 +133,7 @@ function initGame() {
             x: 215,
             y: 157
         },
+        ctx,
         sprites: {
             idle: {
                 imageSrc: `./img/${myCharacter}/Idle.png`,
@@ -175,6 +178,12 @@ function initGame() {
         }
     });
     
+    // Инициализация клавиш для игрока
+    player.keys = {
+        a: { pressed: false },
+        d: { pressed: false }
+    };
+    
     enemy = new Fighter({
         position: {
             x: 400,
@@ -196,6 +205,7 @@ function initGame() {
             x: 215,
             y: 167
         },
+        ctx,
         sprites: {
             idle: {
                 imageSrc: `./img/${myCharacter === 'samuraiMack' ? 'kenji' : 'samuraiMack'}/Idle.png`,

@@ -3,7 +3,8 @@ class Sprite {
         imageSrc,
         scale = 1, 
         framesMax = 1, 
-        offset = {x: 0, y: 0} 
+        offset = {x: 0, y: 0},
+        ctx
     }) {
         this.position = position
         this.width = 50 
@@ -16,11 +17,11 @@ class Sprite {
         this.framesElapsed = 0
         this.framesHold = 5
         this.offset = offset
-        
+        this.ctx = ctx
     }
 
     draw(){
-        c.drawImage(
+        this.ctx.drawImage(
             this.image,
             this.framesCurrent * (this.image.width / this.framesMax),
             0, 
@@ -58,15 +59,16 @@ class Fighter extends Sprite {
         framesMax = 1,
         offset = {x: 0, y: 0},
         sprites,
-        attackBox = {offset: {}, width: undefined, height: undefined}
+        attackBox = {offset: {}, width: undefined, height: undefined},
+        ctx
         }) {
         super({
             position,
             imageSrc,
             scale,
             framesMax,
-            offset
-
+            offset,
+            ctx
         })
 
         this.velocity = velocity
@@ -90,12 +92,15 @@ class Fighter extends Sprite {
         this.framesHold = 5
         this.sprites = sprites
         this.dead = false
+        this.keys = {
+            a: { pressed: false },
+            d: { pressed: false }
+        }
 
         for (const sprite in this.sprites) {
             this.sprites[sprite].image = new Image()
             this.sprites[sprite].image.src = this.sprites[sprite].imageSrc
-            }
-        
+        }
     }
 
 
