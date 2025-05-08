@@ -1,7 +1,7 @@
 {
-  "name": "multiplayer-fighting-game",
+  "name": "fighting-game",
   "version": "1.0.0",
-  "description": "Multiplayer fighting game with Socket.IO",
+  "description": "Многопользовательская браузерная игра-файтинг",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -13,5 +13,16 @@
   },
   "devDependencies": {
     "nodemon": "^3.0.2"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/David5888-wq/fighting-game.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/David5888-wq/fighting-game/issues"
+  },
+  "homepage": "https://github.com/David5888-wq/fighting-game#readme"
 }

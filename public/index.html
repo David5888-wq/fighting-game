@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fighting Game</title>
+    <title>Multiplayer Fighting Game</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
@@ -23,91 +23,86 @@
             background-color: #111;
             overflow: hidden;
         }
-
-        #loginScreen {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            background-color: rgba(0, 0, 0, 0.9);
-            z-index: 100;
+        
+        #lobby-container {
+            width: 800px;
+            background-color: #222;
+            border: 4px solid #444;
+            padding: 20px;
+            color: white;
+            text-align: center;
         }
-
-        #loginForm {
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-            align-items: center;
+        
+        #username-form {
+            margin-bottom: 20px;
         }
-
-        #nicknameInput {
+        
+        #username-input {
             padding: 10px;
             font-size: 16px;
             width: 300px;
-            background-color: #333;
-            color: white;
-            border: 2px solid #666;
-            border-radius: 5px;
+            margin-right: 10px;
         }
-
-        #loginButton {
+        
+        button {
             padding: 10px 20px;
-            font-size: 16px;
-            background-color: #818cf8;
+            background-color: #4CAF50;
             color: white;
             border: none;
-            border-radius: 5px;
             cursor: pointer;
-            transition: background-color 0.3s;
+            font-size: 16px;
         }
-
-        #loginButton:hover {
-            background-color: #6366f1;
+        
+        button:hover {
+            background-color: #45a049;
         }
-
-        #lobbyScreen {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            display: none;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            background-color: rgba(0, 0, 0, 0.9);
-            z-index: 90;
-        }
-
-        #waitingPlayers {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
+        
+        #players-list {
             margin-top: 20px;
+            text-align: left;
         }
-
+        
         .player-item {
-            padding: 10px 20px;
-            background-color: #333;
-            color: white;
-            border: 2px solid #666;
-            border-radius: 5px;
+            padding: 15px;
+            margin: 10px 0;
+            background: #2a2a2a;
+            border-radius: 8px;
+            transition: all 0.3s ease;
             cursor: pointer;
-            transition: background-color 0.3s;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border: 2px solid #3a3a3a;
         }
-
+        
         .player-item:hover {
-            background-color: #444;
+            background: #863636;
+            transform: translateX(5px);
+        }
+        
+        .player-item.in-game {
+            opacity: 0.6;
+            cursor: not-allowed;
+            border-color: #ff4444;
+        }
+        
+        .player-status {
+            color: #4CAF50;
+            font-size: 0.8em;
+            padding: 5px 10px;
+            border-radius: 4px;
+            background: rgba(76, 175, 80, 0.1);
+        }
+        
+        .player-status.in-game {
+            color: #ff4444;
+            background: rgba(255, 68, 68, 0.1);
         }
         
         .game-container {
             position: relative;
-            display: inline-block;
+            display: none;
+            inline-block;
         }
         
         .game-ui {
@@ -177,34 +172,23 @@
         }
         
         canvas {
+            display: block;
+            background: black;
             border: 4px solid #333;
-        }
-
-        body::after {
-            content: "";
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: url('img/12.png') no-repeat center center;
-            background-size: cover;
-            z-index: -1;
         }
     </style>
 </head>
 <body>
-    <div id="loginScreen">
-        <div id="loginForm">
-            <h2 style="color: white; margin-bottom: 20px;">Введите ваш никнейм</h2>
-            <input type="text" id="nicknameInput" placeholder="Никнейм">
-            <button id="loginButton">Войти</button>
+    <div id="lobby-container">
+        <h1>Fighting Game Lobby</h1>
+        <div id="username-form">
+            <input type="text" id="username-input" placeholder="Enter your username" maxlength="20">
+            <button id="register-btn">Join Game</button>
         </div>
-    </div>
-
-    <div id="lobbyScreen">
-        <h2 style="color: white; margin-bottom: 20px;">Ожидающие игроки</h2>
-        <div id="waitingPlayers"></div>
+        <div id="players-list">
+            <h2>Available Players:</h2>
+            <div id="players-container"></div>
+        </div>
     </div>
 
     <div class="game-container">
@@ -222,12 +206,11 @@
             </div>
         </div>
         
-        <div id="displayText">Tie</div>
+        <div id="displayText"></div>
         <canvas width="1024" height="576"></canvas>
     </div>
 
-    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
     <script src="js/utils.js"></script>
     <script src="js/classes.js"></script>
     <script src="js/index.js"></script>

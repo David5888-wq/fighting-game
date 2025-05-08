@@ -1,415 +1,332 @@
-const socket = io();
-
-// DOM элементы
-const loginScreen = document.getElementById('loginScreen');
-const loginForm = document.getElementById('loginForm');
-const nicknameInput = document.getElementById('nicknameInput');
-const loginButton = document.getElementById('loginButton');
-const lobbyScreen = document.getElementById('lobbyScreen');
-const waitingPlayers = document.getElementById('waitingPlayers');
+const canvas = document.querySelector('canvas');
+const c = canvas.getContext('2d');
+const lobbyContainer = document.getElementById('lobby-container');
 const gameContainer = document.querySelector('.game-container');
+const usernameInput = document.getElementById('username-input');
+const registerBtn = document.getElementById('register-btn');
+const playersContainer = document.getElementById('players-container');
 
-// Игровые переменные
-let canvas;
-let ctx;
+const socket = io();
+let playerId;
+let playerUsername;
+let enemyId;
+let gameStarted = false;
+
+const gravity = 0.3;
 let player;
 let enemy;
 let background;
 let shop;
-let timer = 60;
-let timerId;
-let matchId = null;
-let myCharacter = null;
-let opponentId = null;
 
-// Обработка входа
-loginButton.addEventListener('click', () => {
-    const nickname = nicknameInput.value.trim();
-    if (nickname) {
-        socket.emit('playerLogin', nickname);
-        loginScreen.style.display = 'none';
-        lobbyScreen.style.display = 'flex';
-    }
-});
+const keys = {
+    a: { pressed: false },
+    d: { pressed: false },
+    w: { pressed: false },
+    ' ': { pressed: false }
+};
 
-// Обработка обновления списка ожидающих игроков
-socket.on('waitingPlayersUpdate', (players) => {
-    waitingPlayers.innerHTML = '';
-    players.forEach(player => {
-        if (player.id !== socket.id) {
-            const playerElement = document.createElement('div');
-            playerElement.className = 'player-item';
-            playerElement.textContent = player.nickname;
-            playerElement.addEventListener('click', () => {
-                socket.emit('challengePlayer', player.id);
-            });
-            waitingPlayers.appendChild(playerElement);
-        }
-    });
-});
-
-// Обработка начала матча
-socket.on('matchStart', (data) => {
-    matchId = data.matchId;
-    myCharacter = data.character;
-    opponentId = data.opponent.id;
-    
-    lobbyScreen.style.display = 'none';
-    gameContainer.style.display = 'inline-block';
-    
-    initGame();
-});
-
-// Обработка движения противника
-socket.on('opponentMoved', (data) => {
-    if (enemy) {
-        enemy.position = data.position;
-        enemy.velocity = data.velocity;
-        enemy.lastKey = data.lastKey;
-    }
-});
-
-// Обработка атаки противника
-socket.on('opponentAttack', (attackData) => {
-    if (enemy) {
-        enemy.attack();
-    }
-});
-
-// Обработка отключения противника
-socket.on('opponentDisconnected', () => {
-    endMatch('Противник отключился');
-});
-
-// Обработка результата матча
-socket.on('matchResult', (data) => {
-    endMatch(data.winner);
-});
-
-function initGame() {
-    canvas = document.querySelector('canvas');
-    ctx = canvas.getContext('2d');
-    
-    canvas.width = 1024;
-    canvas.height = 576;
-    
-    background = new Sprite({
-        position: {
-            x: 0,
-            y: 0
-        },
-        imageSrc: './img/background.png',
-        ctx
-    });
-    
-    shop = new Sprite({
-        position: {
-            x: 600,
-            y: 128
-        },
-        imageSrc: './img/shop.png',
-        scale: 2.75,
-        framesMax: 6,
-        ctx
-    });
-    
-    player = new Fighter({
-        position: {
-            x: 0,
-            y: 0
-        },
-        velocity: {
-            x: 0,
-            y: 0
-        },
-        offset: {
-            x: 215,
-            y: 157
-        },
-        imageSrc: `./img/${myCharacter}/Idle.png`,
-        framesMax: 8,
-        scale: 2.5,
-        offset: {
-            x: 215,
-            y: 157
-        },
-        ctx,
-        sprites: {
-            idle: {
-                imageSrc: `./img/${myCharacter}/Idle.png`,
-                framesMax: 8
-            },
-            run: {
-                imageSrc: `./img/${myCharacter}/Run.png`,
-                framesMax: 8
-            },
-            jump: {
-                imageSrc: `./img/${myCharacter}/Jump.png`,
-                framesMax: 2
-            },
-            fall: {
-                imageSrc: `./img/${myCharacter}/Fall.png`,
-                framesMax: 2
-            },
-            attack1: {
-                imageSrc: `./img/${myCharacter}/Attack1.png`,
-                framesMax: 6
-            },
-            attack2: {
-                imageSrc: `./img/${myCharacter}/Attack2.png`,
-                framesMax: 6
-            },
-            takeHit: {
-                imageSrc: `./img/${myCharacter}/Take Hit - white silhouette.png`,
-                framesMax: 4
-            },
-            death: {
-                imageSrc: `./img/${myCharacter}/Death.png`,
-                framesMax: 6
-            }
-        },
-        attackBox: {
-            offset: {
-                x: 100,
-                y: 50
-            },
-            width: 160,
-            height: 50
-        }
-    });
-    
-    // Инициализация клавиш для игрока
-    player.keys = {
-        a: { pressed: false },
-        d: { pressed: false }
-    };
-    
-    enemy = new Fighter({
-        position: {
-            x: 400,
-            y: 100
-        },
-        velocity: {
-            x: 0,
-            y: 0
-        },
-        color: 'red',
-        offset: {
-            x: 215,
-            y: 167
-        },
-        imageSrc: `./img/${myCharacter === 'samuraiMack' ? 'kenji' : 'samuraiMack'}/Idle.png`,
-        framesMax: 4,
-        scale: 2.5,
-        offset: {
-            x: 215,
-            y: 167
-        },
-        ctx,
-        sprites: {
-            idle: {
-                imageSrc: `./img/${myCharacter === 'samuraiMack' ? 'kenji' : 'samuraiMack'}/Idle.png`,
-                framesMax: 4
-            },
-            run: {
-                imageSrc: `./img/${myCharacter === 'samuraiMack' ? 'kenji' : 'samuraiMack'}/Run.png`,
-                framesMax: 8
-            },
-            jump: {
-                imageSrc: `./img/${myCharacter === 'samuraiMack' ? 'kenji' : 'samuraiMack'}/Jump.png`,
-                framesMax: 2
-            },
-            fall: {
-                imageSrc: `./img/${myCharacter === 'samuraiMack' ? 'kenji' : 'samuraiMack'}/Fall.png`,
-                framesMax: 2
-            },
-            attack1: {
-                imageSrc: `./img/${myCharacter === 'samuraiMack' ? 'kenji' : 'samuraiMack'}/Attack1.png`,
-                framesMax: 4
-            },
-            attack2: {
-                imageSrc: `./img/${myCharacter === 'samuraiMack' ? 'kenji' : 'samuraiMack'}/Attack2.png`,
-                framesMax: 4
-            },
-            takeHit: {
-                imageSrc: `./img/${myCharacter === 'samuraiMack' ? 'kenji' : 'samuraiMack'}/Take hit.png`,
-                framesMax: 3
-            },
-            death: {
-                imageSrc: `./img/${myCharacter === 'samuraiMack' ? 'kenji' : 'samuraiMack'}/Death.png`,
-                framesMax: 7
-            }
-        },
-        attackBox: {
-            offset: {
-                x: -170,
-                y: 50
-            },
-            width: 170,
-            height: 50
-        }
-    });
-    
-    decreaseTimer(timer, timerId, player, enemy);
-    animate();
-}
-
-function animate() {
-    requestAnimationFrame(animate);
-    ctx.fillStyle = 'black';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    background.update();
-    shop.update();
-    player.update();
-    enemy.update();
-    
-    // Отправка данных о движении на сервер
-    if (matchId) {
-        socket.emit('playerMovement', {
-            matchId,
-            position: player.position,
-            velocity: player.velocity,
-            lastKey: player.lastKey
-        });
-    }
-    
-    // Отправка данных об атаке на сервер
-    if (player.isAttacking) {
-        socket.emit('playerAttack', {
-            matchId,
-            attackData: {
-                attackBox: player.attackBox,
-                isAttacking: true
-            }
-        });
-    }
-    
-    // Проверка столкновений
-    if (
-        rectangularCollision({
-            rectangle1: player,
-            rectangle2: enemy
-        }) &&
-        player.isAttacking &&
-        player.framesCurrent === 4
-    ) {
-        enemy.takeHit();
-        player.isAttacking = false;
-        
-        gsap.to('#enemyHealth', {
-            width: enemy.health + '%'
-        });
-    }
-    
-    if (
-        rectangularCollision({
-            rectangle1: enemy,
-            rectangle2: player
-        }) &&
-        enemy.isAttacking &&
-        enemy.framesCurrent === 2
-    ) {
-        player.takeHit();
-        enemy.isAttacking = false;
-        
-        gsap.to('#playerHealth', {
-            width: player.health + '%'
-        });
-    }
-    
-    // Проверка окончания матча
-    if (enemy.health <= 0 || player.health <= 0) {
-        determineWinner({ player, enemy, timerId });
-    }
-}
-
-function decreaseTimer(timer, timerId, player, enemy) {
-    if (timer > 0) {
-        timerId = setTimeout(decreaseTimer, 1000, timer - 1, timerId, player, enemy);
-        document.querySelector('#timer').innerHTML = timer;
-    }
-    
-    if (timer === 0) {
-        determineWinner({ player, enemy, timerId });
-    }
-}
-
-function determineWinner({ player, enemy, timerId }) {
-    clearTimeout(timerId);
-    document.querySelector('#displayText').style.display = 'flex';
-    
-    let result;
-    if (player.health === enemy.health) {
-        result = 'Tie';
-    } else if (player.health > enemy.health) {
-        result = 'Player 1 Wins';
+// Инициализация игры
+registerBtn.addEventListener('click', () => {
+    const username = usernameInput.value.trim();
+    if (username) {
+        socket.emit('registerPlayer', username);
     } else {
-        result = 'Player 2 Wins';
+        alert('Пожалуйста, введите имя пользователя');
     }
-    
-    document.querySelector('#displayText').innerHTML = result;
-    
-    // Отправка результата на сервер
-    if (matchId) {
-        socket.emit('matchEnd', {
-            matchId,
-            winner: result
-        });
-    }
-}
+});
 
-function endMatch(result) {
-    gameContainer.style.display = 'none';
-    lobbyScreen.style.display = 'flex';
+// Обработчики сокетов
+socket.on('registrationSuccess', (data) => {
+    playerId = data.id;
+    playerUsername = data.username;
     
-    // Сброс игровых переменных
-    matchId = null;
-    myCharacter = null;
-    opponentId = null;
-    timer = 60;
-    document.querySelector('#timer').innerHTML = timer;
-    document.querySelector('#displayText').style.display = 'none';
+    usernameInput.disabled = true;
+    registerBtn.disabled = true;
+    registerBtn.textContent = 'Ожидание противника...';
+    
+    updatePlayersList(data.players);
+});
+
+socket.on('playerJoined', (playerData) => {
+    addPlayerToList(playerData);
+});
+
+socket.on('playerStatusChanged', (data) => {
+    updatePlayerStatus(data.id, data.status);
+});
+
+socket.on('playerLeft', (playerId) => {
+    removePlayerFromList(playerId);
+});
+
+socket.on('challengeFailed', (message) => {
+    alert(message);
+});
+
+socket.on('gameStart', (gameData) => {
+    lobbyContainer.style.display = 'none';
+    gameContainer.style.display = 'inline-block';
+
+    // Сброс состояния игры
     document.querySelector('#playerHealth').style.width = '100%';
     document.querySelector('#enemyHealth').style.width = '100%';
+    document.querySelector('#displayText').style.display = 'none';
+
+    // Инициализация фона
+    background = new Sprite({
+        position: { x: 0, y: 0 },
+        imageSrc: './img/background.png'
+    });
+
+    shop = new Sprite({
+        position: { x: 600, y: 128 },
+        imageSrc: './img/shop.png',
+        scale: 2.75,
+        framesMax: 6
+    });
+
+    // Получаем ID противника
+    enemyId = Object.keys(gameData.players).find(id => id !== playerId);
     
-    // Очистка таймера
-    if (timerId) {
-        clearTimeout(timerId);
+    // Создаем игроков
+    player = createFighter(playerId, gameData.players[playerId], false);
+    enemy = createFighter(enemyId, gameData.players[enemyId], true);
+
+    if (!gameStarted) {
+        animate();
+        gameStarted = true;
+    }
+});
+
+socket.on('gameStateUpdate', (gameData) => {
+    document.querySelector('#timer').innerHTML = Math.floor(gameData.timeLeft);
+    
+    if (enemy) {
+        enemy.position = gameData.players[enemyId].position;
+        enemy.velocity = gameData.players[enemyId].velocity;
+        enemy.isAttacking = gameData.players[enemyId].isAttacking;
+        enemy.facingRight = gameData.players[enemyId].facingRight;
+    }
+});
+
+socket.on('hit', (healthData) => {
+    if (healthData.targetId === playerId) {
+        player.health = healthData.health;
+        document.querySelector('#playerHealth').style.width = player.health + '%';
+        if (player.health > 0) {
+            player.takeHit();
+        }
+    } else if (healthData.targetId === enemyId) {
+        enemy.health = healthData.health;
+        document.querySelector('#enemyHealth').style.width = enemy.health + '%';
+        if (enemy.health > 0) {
+            enemy.takeHit();
+        }
+    }
+});
+
+socket.on('gameOver', (result) => {
+    const displayText = document.querySelector('#displayText');
+    displayText.style.display = 'flex';
+    
+    if (result.winner === playerId) {
+        displayText.textContent = 'Вы победили!';
+    } else if (result.winner === enemyId) {
+        displayText.textContent = 'Вы проиграли!';
+    } else {
+        displayText.textContent = result.reason;
+    }
+    
+    setTimeout(() => {
+        gameContainer.style.display = 'none';
+        lobbyContainer.style.display = 'block';
+        player = null;
+        enemy = null;
+        enemyId = null;
+        displayText.style.display = 'none';
+    }, 5000);
+});
+
+// Функции для работы с лобби
+function updatePlayersList(players) {
+    playersContainer.innerHTML = '';
+    players.forEach(player => {
+        if (player.id !== playerId) {
+            addPlayerToList(player);
+        }
+    });
+}
+
+function addPlayerToList(playerData) {
+    const playerElement = document.createElement('div');
+    playerElement.className = `player-item ${playerData.status === 'inGame' ? 'in-game' : ''}`;
+    playerElement.innerHTML = `
+        <span>${playerData.username}</span>
+        <span class="player-status ${playerData.status === 'inGame' ? 'in-game' : ''}">
+            ${playerData.status === 'inGame' ? 'В игре' : 'Ожидает'}
+        </span>
+    `;
+    
+    if (playerData.status === 'waiting') {
+        playerElement.addEventListener('click', () => {
+            socket.emit('challengePlayer', playerData.id);
+        });
+    }
+
+    playerElement.dataset.playerId = playerData.id;
+    playersContainer.appendChild(playerElement);
+}
+
+function updatePlayerStatus(playerId, status) {
+    const playerElement = document.querySelector(`[data-player-id="${playerId}"]`);
+    if (playerElement) {
+        playerElement.querySelector('.player-status').textContent = status === 'inGame' ? 'В игре' : 'Ожидает';
+        playerElement.querySelector('.player-status').className = `player-status ${status === 'inGame' ? 'in-game' : ''}`;
+        playerElement.className = `player-item ${status === 'inGame' ? 'in-game' : ''}`;
+        
+        if (status === 'inGame') {
+            playerElement.onclick = null;
+        } else {
+            playerElement.addEventListener('click', () => {
+                socket.emit('challengePlayer', playerId);
+            });
+        }
     }
 }
 
-// Обработка клавиш
-window.addEventListener('keydown', (event) => {
-    if (!player) return;
+function removePlayerFromList(playerId) {
+    const playerElement = document.querySelector(`[data-player-id="${playerId}"]`);
+    if (playerElement) {
+        playerElement.remove();
+    }
+}
+
+// Создание бойца
+function createFighter(id, data, isEnemy) {
+    return new Fighter({
+        position: data.position,
+        velocity: data.velocity,
+        offset: data.character.offset,
+        imageSrc: data.character.imageSrc,
+        framesMax: 8,
+        scale: 2.5,
+        sprites: getCharacterSprites(data.character.name),
+        attackBox: data.character.attackBox,
+        isEnemy: isEnemy
+    });
+}
+
+// Получение спрайтов персонажа
+function getCharacterSprites(name) {
+    const basePath = `./img/${name}/`;
+    return {
+        idle: { imageSrc: basePath + 'Idle.png', framesMax: 8 },
+        run: { imageSrc: basePath + 'Run.png', framesMax: 8 },
+        jump: { imageSrc: basePath + 'Jump.png', framesMax: 2 },
+        fall: { imageSrc: basePath + 'Fall.png', framesMax: 2 },
+        attack1: { imageSrc: basePath + 'Attack1.png', framesMax: 6 },
+        takeHit: { imageSrc: basePath + 'Take Hit.png', framesMax: 4 },
+        death: { imageSrc: basePath + 'Death.png', framesMax: 6 }
+    };
+}
+
+// Игровой цикл
+let lastTime = 0;
+function animate(timestamp) {
+    const deltaTime = timestamp - lastTime;
+    lastTime = timestamp;
     
+    window.requestAnimationFrame(animate);
+    c.fillStyle = 'black';
+    c.fillRect(0, 0, canvas.width, canvas.height);
+    
+    background.update(deltaTime);
+    shop.update(deltaTime);
+    
+    c.fillStyle = 'rgba(255, 255, 255, 0.15)';
+    c.fillRect(0, 0, canvas.width, canvas.height);
+    
+    if (player) {
+        player.update(deltaTime);
+        
+        // Отправка данных о движении на сервер
+        socket.emit('movement', {
+            position: player.position,
+            velocity: player.velocity,
+            lastKey: player.lastKey,
+            isAttacking: player.isAttacking,
+            facingRight: player.facingRight
+        });
+    }
+    
+    if (enemy) {
+        enemy.update(deltaTime);
+    }
+
+    // Обработка управления
+    if (player) {
+        player.velocity.x = 0;
+        
+        if (keys.a.pressed && player.lastKey === 'a') {
+            player.velocity.x = -4;
+            player.switchSprite('run');
+            player.facingRight = false;
+        } else if (keys.d.pressed && player.lastKey === 'd') {
+            player.velocity.x = 4;
+            player.switchSprite('run');
+            player.facingRight = true;
+        } else {
+            player.switchSprite('idle');
+        }
+
+        if (player.velocity.y < 0) {
+            player.switchSprite('jump');
+        } else if (player.velocity.y > 0) {
+            player.switchSprite('fall');
+        }
+    }
+
+    // Проверка атаки
+    if (player && enemy) {
+        if (player.isAttacking && rectangularCollision({ rectangle1: player, rectangle2: enemy }) && player.framesCurrent === 4) {
+            socket.emit('attack');
+            player.isAttacking = false;
+        }
+    }
+}
+
+// Обработчики клавиатуры
+window.addEventListener('keydown', (event) => {
+    if (!player || player.dead) return;
+
     switch (event.key) {
-        case 'd':
-            player.keys.d.pressed = true;
-            player.lastKey = 'd';
-            break;
         case 'a':
-            player.keys.a.pressed = true;
+            keys.a.pressed = true;
             player.lastKey = 'a';
             break;
+        case 'd':
+            keys.d.pressed = true;
+            player.lastKey = 'd';
+            break;
         case 'w':
-            player.velocity.y = -20;
+            if (player.position.y === 330) {
+                player.velocity.y = -12;
+            }
             break;
         case ' ':
             player.attack();
+            player.isAttacking = true;
             break;
     }
 });
 
 window.addEventListener('keyup', (event) => {
-    if (!player) return;
-    
     switch (event.key) {
-        case 'd':
-            player.keys.d.pressed = false;
-            break;
         case 'a':
-            player.keys.a.pressed = false;
+            keys.a.pressed = false;
+            break;
+        case 'd':
+            keys.d.pressed = false;
             break;
     }
 });
