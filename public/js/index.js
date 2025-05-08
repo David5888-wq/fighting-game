@@ -250,7 +250,7 @@ function initGame() {
         }
     });
     
-    decreaseTimer();
+    decreaseTimer(timer, timerId, player, enemy);
     animate();
 }
 
@@ -324,10 +324,9 @@ function animate() {
     }
 }
 
-function decreaseTimer() {
+function decreaseTimer(timer, timerId, player, enemy) {
     if (timer > 0) {
-        timerId = setTimeout(decreaseTimer, 1000);
-        timer--;
+        timerId = setTimeout(decreaseTimer, 1000, timer - 1, timerId, player, enemy);
         document.querySelector('#timer').innerHTML = timer;
     }
     
