@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fighting Game - Бой</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #1a1a1a;
+            font-family: Arial, sans-serif;
+        }
+
+        .game-container {
+            position: relative;
+        }
+
+        .game-ui {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            display: flex;
+            justify-content: space-between;
+            padding: 20px;
+            z-index: 10;
+        }
+
+        .health-bar {
+            width: 300px;
+            height: 30px;
+            background-color: #333;
+            border: 2px solid #fff;
+            position: relative;
+        }
+
+        .health-bar-fill {
+            height: 100%;
+            background-color: #4CAF50;
+            transition: width 0.3s ease;
+        }
+
+        #timer {
+            color: #fff;
+            font-size: 24px;
+            padding: 5px 15px;
+            background-color: #333;
+            border: 2px solid #fff;
+        }
+
+        canvas {
+            border: 2px solid #fff;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div class="game-ui">
+            <div class="health-bar">
+                <div id="player1-health" class="health-bar-fill" style="width: 100%"></div>
+            </div>
+            <div id="timer">60</div>
+            <div class="health-bar">
+                <div id="player2-health" class="health-bar-fill" style="width: 100%"></div>
+            </div>
+        </div>
+        <canvas></canvas>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="js/game.js"></script>
+</body>
+</html> 
