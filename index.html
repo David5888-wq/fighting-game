@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<title>Крестики-нолики онлайн</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    text-align: center;
+  }
+  #board {
+    display: grid;
+    grid-template-columns: repeat(3, 100px);
+    grid-template-rows: repeat(3, 100px);
+    gap: 5px;
+    margin: 20px auto;
+  }
+  .cell {
+    background: #eee;
+    font-size: 2em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+  #status {
+    margin-top: 20px;
+  }
+</style>
+</head>
+<body>
+
+<h1>Крестики-нолики онлайн</h1>
+<div id="board"></div>
+<div id="status">Подключение...</div>
+
+<script>
+const ws = new WebSocket('ws://localhost:8080'); // URL сервера
+const boardElement = document.getElementById('board');
+const statusEl = document.getElementById('status');
+
+let isMyTurn = false;
+let mySymbol = null; // 'X' или 'O'
+let gameActive = false;
+
+// Создаем игровое поле
+const cells = [];
+for (let i = 0; i < 9; i++) {
+  const cell = document.createElement('div');
+  cell.className = 'cell';
+  cell.dataset.index = i;
+  cell.addEventListener('click', () => makeMove(i));
+  boardElement.appendChild(cell);
+  cells.push(cell);
+}
+
+// Обработка сообщений WebSocket
+ws.onopen = () => {
+  statusEl.innerText = 'Подключено. Ожидаем другого игрока...';
+  // Отправим сообщение о подключении
+  ws.send(JSON.stringify({ type: 'join' }));
+};
+
+ws.onmessage = (event) => {
+  const msg = JSON.parse(event.data);
+  if (msg.type === 'start') {
+    // Игра началась
+    mySymbol = msg.symbol; // 'X' или 'O'
+    isMyTurn = (mySymbol === 'X'); // Х обычно ходит первым
+    gameActive = true;
+    updateStatus();
+  } else if (msg.type === 'move') {
+    // Получили ход другого игрока
+    const index = msg.index;
+    const symbol = msg.symbol;
+    cells[index].innerText = symbol;
+    if (checkWin(symbol)) {
+      updateStatus(`Игрок ${symbol} победил!`);
+      gameActive = false;
+    } else if (isDraw()) {
+      updateStatus('Ничья!');
+      gameActive = false;
+    } else {
+      isMyTurn = true;
+      updateStatus();
+    }
+  } else if (msg.type === 'reset') {
+    resetBoard();
+  }
+};
+
+function makeMove(index) {
+  if (!gameActive || !isMyTurn || cells[index].innerText !== '') return;
+  cells[index].innerText = mySymbol;
+  ws.send(JSON.stringify({ type: 'move', index: index, symbol: mySymbol }));
+  if (checkWin(mySymbol)) {
+    updateStatus('Вы победили!');
+    gameActive = false;
+  } else if (isDraw()) {
+    updateStatus('Ничья!');
+    gameActive = false;
+  } else {
+    isMyTurn = false;
+    updateStatus();
+  }
+}
+
+function updateStatus() {
+  if (!gameActive) {
+    statusEl.innerText = 'Игра завершена. Перезагрузите страницу, чтобы начать заново.';
+  } else if (isMyTurn) {
+    statusEl.innerText = 'Ваш ход (' + mySymbol + ')';
+  } else {
+    statusEl.innerText = 'Ждите хода соперника...';
+  }
+}
+
+function checkWin(sym) {
+  const wins = [
+    [0,1,2], [3,4,5], [6,7,8], // строки
+    [0,3,6], [1,4,7], [2,5,8], // столбцы
+    [0,4,8], [2,4,6] // диагонали
+  ];
+  return wins.some(line => line.every(i => cells[i].innerText === sym));
+}
+
+function isDraw() {
+  return cells.every(c => c.innerText !== '');
+}
+
+function resetBoard() {
+  for (let c of cells) {
+    c.innerText = '';
+  }
+  gameActive = true;
+  // Можно реализовать перезапуск игры по кнопке
+}
+
+</script>
+
+</body>
+</html>
