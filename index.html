@@ -1,142 +1,214 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-<meta charset="UTF-8" />
-<title>Крестики-нолики онлайн</title>
-<style>
-  body {
-    font-family: Arial, sans-serif;
-    text-align: center;
-  }
-  #board {
-    display: grid;
-    grid-template-columns: repeat(3, 100px);
-    grid-template-rows: repeat(3, 100px);
-    gap: 5px;
-    margin: 20px auto;
-  }
-  .cell {
-    background: #eee;
-    font-size: 2em;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-  }
-  #status {
-    margin-top: 20px;
-  }
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Крестики-нолики онлайн</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background-color: #f5f5f5;
+      margin: 0;
+      padding: 20px;
+    }
+    #board {
+      display: grid;
+      grid-template-columns: repeat(3, 100px);
+      grid-template-rows: repeat(3, 100px);
+      gap: 5px;
+      margin: 20px auto;
+      width: 310px;
+    }
+    .cell {
+      background: #fff;
+      border: 2px solid #333;
+      font-size: 2.5em;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    .cell:hover {
+      background: #f0f0f0;
+    }
+    #status {
+      margin-top: 20px;
+      font-size: 1.2em;
+      font-weight: bold;
+      color: #333;
+      min-height: 60px;
+    }
+    #restart-btn {
+      margin-top: 20px;
+      padding: 10px 20px;
+      font-size: 1em;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    #restart-btn:hover {
+      background: #45a049;
+    }
+    @media (max-width: 400px) {
+      #board {
+        grid-template-columns: repeat(3, 80px);
+        grid-template-rows: repeat(3, 80px);
+        width: 250px;
+      }
+    }
+  </style>
 </head>
 <body>
+  <h1>Крестики-нолики онлайн</h1>
+  <div id="board"></div>
+  <div id="status">Подключение к серверу...</div>
+  <button id="restart-btn" style="display: none;">Начать заново</button>
 
-<h1>Крестики-нолики онлайн</h1>
-<div id="board"></div>
-<div id="status">Подключение...</div>
+  <script>
+    // Автоматическое определение WebSocket URL
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+    const wsUrl = wsProtocol + window.location.host;
+    const ws = new WebSocket(wsUrl);
+    
+    const boardElement = document.getElementById('board');
+    const statusEl = document.getElementById('status');
+    const restartBtn = document.getElementById('restart-btn');
 
-<script>
-const ws = new WebSocket('wss://https://myfighting-game.ru/:8080'); // URL сервера
-const boardElement = document.getElementById('board');
-const statusEl = document.getElementById('status');
+    let isMyTurn = false;
+    let mySymbol = null;
+    let gameActive = false;
+    const cells = [];
 
-let isMyTurn = false;
-let mySymbol = null; // 'X' или 'O'
-let gameActive = false;
+    // Создание игрового поля
+    for (let i = 0; i < 9; i++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      cell.dataset.index = i;
+      cell.addEventListener('click', () => makeMove(i));
+      boardElement.appendChild(cell);
+      cells.push(cell);
+    }
 
-// Создаем игровое поле
-const cells = [];
-for (let i = 0; i < 9; i++) {
-  const cell = document.createElement('div');
-  cell.className = 'cell';
-  cell.dataset.index = i;
-  cell.addEventListener('click', () => makeMove(i));
-  boardElement.appendChild(cell);
-  cells.push(cell);
-}
+    // Обработчики WebSocket
+    ws.onopen = () => {
+      statusEl.textContent = 'Подключено. Ожидаем другого игрока...';
+    };
 
-// Обработка сообщений WebSocket
-ws.onopen = () => {
-  statusEl.innerText = 'Подключено. Ожидаем другого игрока...';
-  // Отправим сообщение о подключении
-  ws.send(JSON.stringify({ type: 'join' }));
-};
+    ws.onmessage = (event) => {
+      const msg = JSON.parse(event.data);
+      
+      if (msg.type === 'start') {
+        handleGameStart(msg);
+      } else if (msg.type === 'move') {
+        handleOpponentMove(msg);
+      } else if (msg.type === 'gameover') {
+        handleGameOver(msg);
+      } else if (msg.type === 'reset') {
+        resetBoard();
+      } else if (msg.type === 'full') {
+        statusEl.textContent = 'Сервер переполнен. Попробуйте позже.';
+      } else if (msg.type === 'message') {
+        statusEl.textContent = msg.message;
+      }
+    };
 
-ws.onmessage = (event) => {
-  const msg = JSON.parse(event.data);
-  if (msg.type === 'start') {
-    // Игра началась
-    mySymbol = msg.symbol; // 'X' или 'O'
-    isMyTurn = (mySymbol === 'X'); // Х обычно ходит первым
-    gameActive = true;
-    updateStatus();
-  } else if (msg.type === 'move') {
-    // Получили ход другого игрока
-    const index = msg.index;
-    const symbol = msg.symbol;
-    cells[index].innerText = symbol;
-    if (checkWin(symbol)) {
-      updateStatus(`Игрок ${symbol} победил!`);
+    ws.onclose = () => {
+      statusEl.textContent = 'Соединение с сервером потеряно.';
       gameActive = false;
-    } else if (isDraw()) {
-      updateStatus('Ничья!');
+    };
+
+    restartBtn.addEventListener('click', () => {
+      ws.send(JSON.stringify({ type: 'reset' }));
+      restartBtn.style.display = 'none';
+    });
+
+    function handleGameStart(msg) {
+      mySymbol = msg.symbol;
+      isMyTurn = mySymbol === 'X';
+      gameActive = true;
+      updateStatus();
+      restartBtn.style.display = 'none';
+    }
+
+    function handleOpponentMove(msg) {
+      cells[msg.index].textContent = msg.symbol;
+      if (checkWin(msg.symbol)) {
+        updateStatus(msg.symbol === mySymbol ? 'Вы победили!' : 'Вы проиграли!');
+        gameActive = false;
+        restartBtn.style.display = 'block';
+      } else if (isDraw()) {
+        updateStatus('Ничья!');
+        gameActive = false;
+        restartBtn.style.display = 'block';
+      } else {
+        isMyTurn = msg.symbol !== mySymbol;
+        updateStatus();
+      }
+    }
+
+    function handleGameOver(msg) {
+      updateStatus(msg.message);
       gameActive = false;
-    } else {
-      isMyTurn = true;
+      restartBtn.style.display = 'block';
+    }
+
+    function makeMove(index) {
+      if (!gameActive || !isMyTurn || cells[index].textContent !== '') return;
+      
+      cells[index].textContent = mySymbol;
+      ws.send(JSON.stringify({ 
+        type: 'move', 
+        index, 
+        symbol: mySymbol 
+      }));
+      
+      if (checkWin(mySymbol)) {
+        updateStatus('Вы победили!');
+        gameActive = false;
+        restartBtn.style.display = 'block';
+      } else if (isDraw()) {
+        updateStatus('Ничья!');
+        gameActive = false;
+        restartBtn.style.display = 'block';
+      } else {
+        isMyTurn = false;
+        updateStatus('Ждите хода соперника...');
+      }
+    }
+
+    function updateStatus(text) {
+      if (text) {
+        statusEl.textContent = text;
+      } else if (isMyTurn) {
+        statusEl.textContent = `Ваш ход (${mySymbol})`;
+      }
+    }
+
+    function checkWin(symbol) {
+      const winPatterns = [
+        [0,1,2], [3,4,5], [6,7,8],
+        [0,3,6], [1,4,7], [2,5,8],
+        [0,4,8], [2,4,6]
+      ];
+      return winPatterns.some(pattern => 
+        pattern.every(index => cells[index].textContent === symbol)
+      );
+    }
+
+    function isDraw() {
+      return cells.every(cell => cell.textContent !== '');
+    }
+
+    function resetBoard() {
+      cells.forEach(cell => cell.textContent = '');
+      gameActive = true;
+      isMyTurn = mySymbol === 'X';
       updateStatus();
     }
-  } else if (msg.type === 'reset') {
-    resetBoard();
-  }
-};
-
-function makeMove(index) {
-  if (!gameActive || !isMyTurn || cells[index].innerText !== '') return;
-  cells[index].innerText = mySymbol;
-  ws.send(JSON.stringify({ type: 'move', index: index, symbol: mySymbol }));
-  if (checkWin(mySymbol)) {
-    updateStatus('Вы победили!');
-    gameActive = false;
-  } else if (isDraw()) {
-    updateStatus('Ничья!');
-    gameActive = false;
-  } else {
-    isMyTurn = false;
-    updateStatus();
-  }
-}
-
-function updateStatus() {
-  if (!gameActive) {
-    statusEl.innerText = 'Игра завершена. Перезагрузите страницу, чтобы начать заново.';
-  } else if (isMyTurn) {
-    statusEl.innerText = 'Ваш ход (' + mySymbol + ')';
-  } else {
-    statusEl.innerText = 'Ждите хода соперника...';
-  }
-}
-
-function checkWin(sym) {
-  const wins = [
-    [0,1,2], [3,4,5], [6,7,8], // строки
-    [0,3,6], [1,4,7], [2,5,8], // столбцы
-    [0,4,8], [2,4,6] // диагонали
-  ];
-  return wins.some(line => line.every(i => cells[i].innerText === sym));
-}
-
-function isDraw() {
-  return cells.every(c => c.innerText !== '');
-}
-
-function resetBoard() {
-  for (let c of cells) {
-    c.innerText = '';
-  }
-  gameActive = true;
-  // Можно реализовать перезапуск игры по кнопке
-}
-
-</script>
-
+  </script>
 </body>
 </html>
