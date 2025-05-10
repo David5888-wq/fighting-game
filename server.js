@@ -106,8 +106,7 @@ io.on('connection', (socket) => {
     serverState.players.set(socket.id, {
       id: socket.id,
       username,
-      status: 'waiting',
-      character: null
+      status: 'waiting'
     });
 
     socket.emit('registrationSuccess', {

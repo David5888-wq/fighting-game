@@ -31,7 +31,7 @@ registerBtn.addEventListener('click', () => {
     if (username) {
         socket.emit('registerPlayer', username);
     } else {
-        alert('Пожалуйста, введите имя пользователя');
+        alert('Please enter a username');
     }
 });
 
@@ -42,7 +42,7 @@ socket.on('registrationSuccess', (data) => {
     
     usernameInput.disabled = true;
     registerBtn.disabled = true;
-    registerBtn.textContent = 'Ожидание противника...';
+    registerBtn.textContent = 'Waiting for opponent...';
     
     updatePlayersList(data.players);
 });
@@ -130,9 +130,9 @@ socket.on('gameOver', (result) => {
     displayText.style.display = 'flex';
     
     if (result.winner === playerId) {
-        displayText.textContent = 'Вы победили!';
+        displayText.textContent = 'You Win!';
     } else if (result.winner === enemyId) {
-        displayText.textContent = 'Вы проиграли!';
+        displayText.textContent = 'You Lose!';
     } else {
         displayText.textContent = result.reason;
     }
@@ -163,7 +163,7 @@ function addPlayerToList(playerData) {
     playerElement.innerHTML = `
         <span>${playerData.username}</span>
         <span class="player-status ${playerData.status === 'inGame' ? 'in-game' : ''}">
-            ${playerData.status === 'inGame' ? 'В игре' : 'Ожидает'}
+            ${playerData.status === 'inGame' ? 'In Game' : 'Waiting'}
         </span>
     `;
     
@@ -180,7 +180,7 @@ function addPlayerToList(playerData) {
 function updatePlayerStatus(playerId, status) {
     const playerElement = document.querySelector(`[data-player-id="${playerId}"]`);
     if (playerElement) {
-        playerElement.querySelector('.player-status').textContent = status === 'inGame' ? 'В игре' : 'Ожидает';
+        playerElement.querySelector('.player-status').textContent = status === 'inGame' ? 'In Game' : 'Waiting';
         playerElement.querySelector('.player-status').className = `player-status ${status === 'inGame' ? 'in-game' : ''}`;
         playerElement.className = `player-item ${status === 'inGame' ? 'in-game' : ''}`;
         
