@@ -1,157 +1,159 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
+canvas.width = 1024;
+canvas.height = 576;
 
-// Игровые объекты
-let player = null;
-let opponent = null;
-let background = null;
+// Гравитация
+const gravity = 0.7;
 
 // Загрузка изображений
-const images = {};
-const imageFiles = {
-    background: 'img/background.png',
-    ryu: {
-        idle: 'img/ryu/idle.png',
-        walk: 'img/ryu/walk.png',
-        jump: 'img/ryu/jump.png',
-        attack: 'img/ryu/attack.png'
-    },
-    ken: {
-        idle: 'img/ken/idle.png',
-        walk: 'img/ken/walk.png',
-        jump: 'img/ken/jump.png',
-        attack: 'img/ken/attack.png'
-    },
-    // Добавьте остальных персонажей по аналогии
-};
+const backgroundImg = new Image();
+backgroundImg.src = 'img/background.png';
+const shopImg = new Image();
+shopImg.src = 'img/shop.png';
 
-// Загрузка всех изображений
-function loadImages() {
-    return new Promise((resolve) => {
-        let loadedImages = 0;
-        const totalImages = Object.keys(imageFiles).length + 
-            Object.keys(imageFiles).filter(key => typeof imageFiles[key] === 'object').length * 3;
-
-        function imageLoaded() {
-            loadedImages++;
-            if (loadedImages === totalImages) {
-                resolve();
+// Классы (упрощённо, как в classes.js)
+class Sprite {
+    constructor({ position, image, scale = 1, framesMax = 1, offset = { x: 0, y: 0 } }) {
+        this.position = position;
+        this.image = image;
+        this.scale = scale;
+        this.framesMax = framesMax;
+        this.framesCurrent = 0;
+        this.framesElapsed = 0;
+        this.framesHold = 10;
+        this.offset = offset;
+    }
+    draw() {
+        ctx.drawImage(
+            this.image,
+            this.framesCurrent * (this.image.width / this.framesMax),
+            0,
+            this.image.width / this.framesMax,
+            this.image.height,
+            this.position.x - this.offset.x,
+            this.position.y - this.offset.y,
+            (this.image.width / this.framesMax) * this.scale,
+            this.image.height * this.scale
+        );
+    }
+    animateFrames() {
+        this.framesElapsed++;
+        if (this.framesElapsed % this.framesHold === 0) {
+            if (this.framesCurrent < this.framesMax - 1) {
+                this.framesCurrent++;
+            } else {
+                this.framesCurrent = 0;
             }
         }
+    }
+    update() {
+        this.draw();
+        this.animateFrames();
+    }
+}
 
-        // Загрузка фона
-        images.background = new Image();
-        images.background.src = imageFiles.background;
-        images.background.onload = imageLoaded;
+// Магазин
+const shop = new Sprite({
+    position: { x: 600, y: 128 },
+    image: shopImg,
+    scale: 2.75,
+    framesMax: 6,
+    offset: { x: 0, y: 0 }
+});
 
-        // Загрузка спрайтов персонажей
-        for (const character in imageFiles) {
-            if (typeof imageFiles[character] === 'object') {
-                images[character] = {};
-                for (const state in imageFiles[character]) {
-                    images[character][state] = new Image();
-                    images[character][state].src = imageFiles[character][state];
-                    images[character][state].onload = imageLoaded;
-                }
-            }
+// Фон
+const background = new Sprite({
+    position: { x: 0, y: 0 },
+    image: backgroundImg,
+    scale: 1,
+    framesMax: 1,
+    offset: { x: 0, y: 0 }
+});
+
+// Персонажи (пример для двух)
+let player, enemy;
+
+function createFighters(playerCharacter, opponentCharacter) {
+    // Пример: используем samuraiMack и kenji
+    player = new Fighter({
+        position: { x: 0, y: 0 },
+        velocity: { x: 0, y: 0 },
+        color: 'red',
+        imageSrc: 'img/samuraiMack/Idle.png',
+        framesMax: 8,
+        scale: 2.5,
+        offset: { x: 215, y: 157 },
+        sprites: {
+            idle: { imageSrc: 'img/samuraiMack/Idle.png', framesMax: 8 },
+            run: { imageSrc: 'img/samuraiMack/Run.png', framesMax: 8 },
+            jump: { imageSrc: 'img/samuraiMack/Jump.png', framesMax: 2 },
+            fall: { imageSrc: 'img/samuraiMack/Fall.png', framesMax: 2 },
+            attack1: { imageSrc: 'img/samuraiMack/Attack1.png', framesMax: 6 },
+            takeHit: { imageSrc: 'img/samuraiMack/Take Hit - white silhouette.png', framesMax: 4 },
+            death: { imageSrc: 'img/samuraiMack/Death.png', framesMax: 6 }
+        },
+        attackBox: {
+            offset: { x: 100, y: 50 },
+            width: 160,
+            height: 50
+        }
+    });
+    enemy = new Fighter({
+        position: { x: 400, y: 100 },
+        velocity: { x: 0, y: 0 },
+        color: 'blue',
+        imageSrc: 'img/kenji/Idle.png',
+        framesMax: 4,
+        scale: 2.5,
+        offset: { x: 215, y: 167 },
+        sprites: {
+            idle: { imageSrc: 'img/kenji/Idle.png', framesMax: 4 },
+            run: { imageSrc: 'img/kenji/Run.png', framesMax: 8 },
+            jump: { imageSrc: 'img/kenji/Jump.png', framesMax: 2 },
+            fall: { imageSrc: 'img/kenji/Fall.png', framesMax: 2 },
+            attack1: { imageSrc: 'img/kenji/Attack1.png', framesMax: 4 },
+            takeHit: { imageSrc: 'img/kenji/Take hit.png', framesMax: 3 },
+            death: { imageSrc: 'img/kenji/Death.png', framesMax: 7 }
+        },
+        attackBox: {
+            offset: { x: -170, y: 50 },
+            width: 170,
+            height: 50
         }
     });
 }
 
-// Класс игрока
-class Fighter {
-    constructor(x, y, character, isPlayer = true) {
-        this.x = x;
-        this.y = y;
-        this.character = character;
-        this.isPlayer = isPlayer;
-        this.state = 'idle';
-        this.frame = 0;
-        this.frameCount = 0;
-        this.health = 100;
-        this.velocity = { x: 0, y: 0 };
-        this.isJumping = false;
-        this.isAttacking = false;
-    }
-
-    update() {
-        // Обновление позиции
-        this.x += this.velocity.x;
-        this.y += this.velocity.y;
-
-        // Гравитация
-        if (this.isJumping) {
-            this.velocity.y += 0.8;
-            if (this.y >= 400) { // Уровень земли
-                this.y = 400;
-                this.velocity.y = 0;
-                this.isJumping = false;
-            }
-        }
-
-        // Анимация
-        this.frameCount++;
-        if (this.frameCount >= 5) {
-            this.frame = (this.frame + 1) % 4;
-            this.frameCount = 0;
-        }
-    }
-
-    draw() {
-        const sprite = images[this.character][this.state];
-        const frameWidth = sprite.width / 4;
-        const frameHeight = sprite.height;
-
-        ctx.save();
-        if (!this.isPlayer) {
-            ctx.scale(-1, 1);
-            ctx.translate(-canvas.width, 0);
-        }
-
-        ctx.drawImage(
-            sprite,
-            this.frame * frameWidth, 0, frameWidth, frameHeight,
-            this.isPlayer ? this.x : canvas.width - this.x - frameWidth,
-            this.y,
-            frameWidth,
-            frameHeight
-        );
-
-        ctx.restore();
-    }
-
-    move(direction) {
-        if (direction === 'left') {
-            this.velocity.x = -5;
-            this.state = 'walk';
-        } else if (direction === 'right') {
-            this.velocity.x = 5;
-            this.state = 'walk';
-        } else {
-            this.velocity.x = 0;
-            this.state = 'idle';
-        }
-    }
-
-    jump() {
-        if (!this.isJumping) {
-            this.velocity.y = -15;
-            this.isJumping = true;
-            this.state = 'jump';
-        }
-    }
-
-    attack() {
-        if (!this.isAttacking) {
-            this.isAttacking = true;
-            this.state = 'attack';
-            setTimeout(() => {
-                this.isAttacking = false;
-                this.state = 'idle';
-            }, 500);
-        }
-    }
+// Инициализация игры
+function initGame(playerCharacter, opponentCharacter) {
+    createFighters(playerCharacter, opponentCharacter);
+    document.getElementById('shop').style.display = 'block';
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('keyup', handleKeyUp);
+    gameLoop();
 }
+
+function gameLoop() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    background.update();
+    shop.update();
+    if (player) player.update();
+    if (enemy) enemy.update();
+    requestAnimationFrame(gameLoop);
+}
+
+function cleanupGame() {
+    player = null;
+    enemy = null;
+    document.getElementById('shop').style.display = 'none';
+    document.removeEventListener('keydown', handleKeyDown);
+    document.removeEventListener('keyup', handleKeyUp);
+}
+
+function handleKeyDown(e) {
+    // управление игроком и врагом (пример)
+}
+function handleKeyUp(e) {}
 
 // Инициализация игры
 function initGame(playerCharacter, opponentCharacter) {
@@ -209,41 +211,6 @@ function updateOpponentPosition(data) {
     }
 }
 
-// Игровой цикл
-function gameLoop() {
-    // Очистка канваса
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Отрисовка фона
-    ctx.drawImage(background, 0, 0, canvas.width, canvas.height);
-
-    // Обновление и отрисовка игроков
-    if (player) {
-        player.update();
-        player.draw();
-    }
-    if (opponent) {
-        opponent.update();
-        opponent.draw();
-    }
-
-    // Отправка данных о движении
-    if (player) {
-        socket.emit('playerMovement', {
-            x: player.x,
-            y: player.y,
-            state: player.state,
-            frame: player.frame
-        });
-    }
-
-    // Проверка столкновений
-    checkCollisions();
-
-    // Следующий кадр
-    requestAnimationFrame(gameLoop);
-}
-
 // Проверка столкновений
 function checkCollisions() {
     if (!player || !opponent) return;
@@ -258,14 +225,6 @@ function checkCollisions() {
             }
         }
     }
-}
-
-// Очистка игрового состояния
-function cleanupGame() {
-    player = null;
-    opponent = null;
-    document.removeEventListener('keydown', handleKeyDown);
-    document.removeEventListener('keyup', handleKeyUp);
 }
 
 // Загрузка всех ресурсов перед началом
