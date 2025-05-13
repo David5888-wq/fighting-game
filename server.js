@@ -4,126 +4,84 @@ const http = require('http').createServer(app);
 const io = require('socket.io')(http, { cors: { origin: '*' } });
 const PORT = 3000;
 
-// Хранение данных игроков и матчей
 const players = {};
 const waitingPlayers = [];
-const activeMatches = {};
-
-// Список доступных персонажей
-const characters = ['ryu', 'ken', 'chunli', 'guile', 'dhalsim', 'zangief'];
+const activeMatches = new Map();
 
 app.use(express.static('public'));
+
+function createMatch(player1Id, player2Id) {
+    const matchId = `${player1Id}-${player2Id}`;
+    activeMatches.set(matchId, {
+        players: [player1Id, player2Id],
+        scores: { [player1Id]: 0, [player2Id]: 0 }
+    });
+    return matchId;
+}
 
 io.on('connection', (socket) => {
     console.log('Новый игрок подключён:', socket.id);
 
-    // Обработка входа в лобби
-    socket.on('joinLobby', (playerData) => {
-        const player = {
-            id: socket.id,
-            nickname: playerData.nickname,
-            character: null,
-            inMatch: false
-        };
+    // Добавление игрока в список ожидания
+    socket.on('joinQueue', () => {
+        if (waitingPlayers.includes(socket.id)) return;
         
-        players[socket.id] = player;
         waitingPlayers.push(socket.id);
+        socket.emit('queueStatus', { position: waitingPlayers.length });
         
-        // Отправляем обновленный список ожидающих игроков всем
-        io.emit('lobbyUpdate', waitingPlayers.map(id => ({
-            id: id,
-            nickname: players[id].nickname
-        })));
-    });
-
-    // Обработка выбора противника
-    socket.on('challengePlayer', (targetId) => {
-        const challenger = players[socket.id];
-        const target = players[targetId];
-        
-        if (challenger && target && !challenger.inMatch && !target.inMatch) {
-            // Случайный выбор персонажей
-            challenger.character = characters[Math.floor(Math.random() * characters.length)];
-            target.character = characters[Math.floor(Math.random() * characters.length)];
+        // Если есть как минимум 2 игрока в очереди, создаем матч
+        if (waitingPlayers.length >= 2) {
+            const player1 = waitingPlayers.shift();
+            const player2 = waitingPlayers.shift();
             
-            // Создаем матч
-            const matchId = `${socket.id}-${targetId}`;
-            activeMatches[matchId] = {
-                players: [socket.id, targetId],
-                characters: [challenger.character, target.character],
-                scores: [0, 0]
-            };
+            const matchId = createMatch(player1, player2);
             
-            // Обновляем статус игроков
-            challenger.inMatch = true;
-            target.inMatch = true;
+            // Определение цветов игроков
+            players[player1] = { id: player1, color: 'red', position: { x: 0, y: 0 } };
+            players[player2] = { id: player2, color: 'blue', position: { x: 400, y: 0 } };
             
-            // Удаляем из списка ожидания
-            waitingPlayers.splice(waitingPlayers.indexOf(socket.id), 1);
-            waitingPlayers.splice(waitingPlayers.indexOf(targetId), 1);
-            
-            // Отправляем информацию о начале матча
-            io.to(socket.id).emit('matchStart', {
-                matchId: matchId,
-                opponent: target.nickname,
-                yourCharacter: challenger.character,
-                opponentCharacter: target.character
+            // Уведомляем игроков о начале матча
+            io.to(player1).to(player2).emit('matchFound', {
+                matchId,
+                players: [player1, player2],
+                colors: { [player1]: 'red', [player2]: 'blue' }
             });
-            
-            io.to(targetId).emit('matchStart', {
-                matchId: matchId,
-                opponent: challenger.nickname,
-                yourCharacter: target.character,
-                opponentCharacter: challenger.character
-            });
-            
-            // Обновляем лобби для всех
-            io.emit('lobbyUpdate', waitingPlayers.map(id => ({
-                id: id,
-                nickname: players[id].nickname
-            })));
         }
     });
 
-    // Обработка движения в матче
-    socket.on('playerMovement', (data) => {
-        const matchId = Object.keys(activeMatches).find(id => 
-            activeMatches[id].players.includes(socket.id)
-        );
-        
-        if (matchId) {
-            const opponentId = activeMatches[matchId].players.find(id => id !== socket.id);
-            io.to(opponentId).emit('opponentMoved', data);
-        }
-    });
-
-    // Обработка завершения матча
-    socket.on('matchEnd', (data) => {
-        const matchId = Object.keys(activeMatches).find(id => 
-            activeMatches[id].players.includes(socket.id)
-        );
-        
-        if (matchId) {
-            const match = activeMatches[matchId];
-            const players = match.players;
+    // Обработка движения
+    socket.on('playerMovement', (movementData) => {
+        if (players[socket.id]) {
+            players[socket.id].position = movementData.position;
+            players[socket.id].velocity = movementData.velocity;
+            players[socket.id].lastKey = movementData.lastKey;
             
-            // Возвращаем игроков в лобби
-            players.forEach(playerId => {
-                if (players[playerId]) {
-                    players[playerId].inMatch = false;
-                    players[playerId].character = null;
-                    waitingPlayers.push(playerId);
+            // Находим текущий матч игрока
+            for (const [matchId, match] of activeMatches.entries()) {
+                if (match.players.includes(socket.id)) {
+                    // Отправляем обновление только игрокам в этом матче
+                    match.players.forEach(playerId => {
+                        if (playerId !== socket.id) {
+                            io.to(playerId).emit('playerMoved', players[socket.id]);
+                        }
+                    });
+                    break;
                 }
-            });
-            
-            // Удаляем матч
-            delete activeMatches[matchId];
-            
-            // Обновляем лобби
-            io.emit('lobbyUpdate', waitingPlayers.map(id => ({
-                id: id,
-                nickname: players[id].nickname
-            })));
+            }
+        }
+    });
+
+    // Обработка удара
+    socket.on('playerAttack', (attackData) => {
+        for (const [matchId, match] of activeMatches.entries()) {
+            if (match.players.includes(socket.id)) {
+                match.players.forEach(playerId => {
+                    if (playerId !== socket.id) {
+                        io.to(playerId).emit('enemyAttack', attackData);
+                    }
+                });
+                break;
+            }
         }
     });
 
@@ -132,32 +90,28 @@ io.on('connection', (socket) => {
         console.log('Игрок отключён:', socket.id);
         
         // Удаляем из списка ожидания
-        const waitingIndex = waitingPlayers.indexOf(socket.id);
-        if (waitingIndex !== -1) {
-            waitingPlayers.splice(waitingIndex, 1);
+        const queueIndex = waitingPlayers.indexOf(socket.id);
+        if (queueIndex !== -1) {
+            waitingPlayers.splice(queueIndex, 1);
         }
         
         // Удаляем из активных матчей
-        const matchId = Object.keys(activeMatches).find(id => 
-            activeMatches[id].players.includes(socket.id)
-        );
-        
-        if (matchId) {
-            const opponentId = activeMatches[matchId].players.find(id => id !== socket.id);
-            io.to(opponentId).emit('opponentDisconnected');
-            delete activeMatches[matchId];
+        for (const [matchId, match] of activeMatches.entries()) {
+            if (match.players.includes(socket.id)) {
+                match.players.forEach(playerId => {
+                    if (playerId !== socket.id) {
+                        io.to(playerId).emit('opponentDisconnected');
+                    }
+                });
+                activeMatches.delete(matchId);
+                break;
+            }
         }
         
         delete players[socket.id];
-        
-        // Обновляем лобби
-        io.emit('lobbyUpdate', waitingPlayers.map(id => ({
-            id: id,
-            nickname: players[id].nickname
-        })));
     });
 });
 
 http.listen(PORT, '0.0.0.0', () => {
-    console.log(`Сервер запущен на порту ${PORT}`);
+    console.log(`Сервер доступен по адресу http://localhost:${PORT}`);
 });
