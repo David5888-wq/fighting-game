@@ -1,7 +1,7 @@
 {
-  "name": "multiplayer-fighting-game",
+  "name": "street-fighter-online",
   "version": "1.0.0",
-  "description": "Multiplayer fighting game with Socket.IO",
+  "description": "Многопользовательская браузерная файтинг-игра",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

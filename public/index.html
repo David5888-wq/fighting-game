@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fighting Game</title>
+    <title>Street Fighter Online</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
@@ -16,12 +16,76 @@
         }
         
         body {
+            margin: 0;
+            padding: 0;
             display: flex;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
-            background-color: #111;
+            background: #333;
             overflow: hidden;
+        }
+        
+        #gameContainer {
+            position: relative;
+            width: 800px;
+            height: 600px;
+        }
+        
+        #lobbyScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+        
+        #nicknameInput {
+            padding: 10px;
+            font-size: 18px;
+            margin-bottom: 20px;
+            width: 200px;
+        }
+        
+        #waitingList {
+            width: 300px;
+            max-height: 400px;
+            overflow-y: auto;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 10px;
+            border-radius: 5px;
+        }
+        
+        .waitingPlayer {
+            padding: 10px;
+            margin: 5px 0;
+            background: rgba(255, 255, 255, 0.2);
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        
+        .waitingPlayer:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        
+        #gameCanvas {
+            display: none;
+            border: 2px solid #666;
+        }
+        
+        #matchInfo {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-size: 18px;
+            text-shadow: 2px 2px 2px rgba(0, 0, 0, 0.5);
         }
         
         .game-container {
@@ -114,28 +178,90 @@
     </style>
 </head>
 <body>
-    <div class="game-container">
-        <div class="game-ui">
-            <div class="health-bar-container" style="border-right: none;">
-                <div class="health-bar-background"></div>
-                <div id="playerHealth"></div>
-            </div>
-            
-            <div id="timer">60</div>
-            
-            <div class="health-bar-container" style="border-left: none;">
-                <div class="health-bar-background"></div>
-                <div id="enemyHealth"></div>
-            </div>
+    <div id="gameContainer">
+        <div id="lobbyScreen">
+            <h1>Street Fighter Online</h1>
+            <input type="text" id="nicknameInput" placeholder="Введите ваш ник">
+            <button onclick="joinLobby()">Войти в лобби</button>
+            <div id="waitingList"></div>
         </div>
-        
-        <div id="displayText">Tie</div>
-        <canvas width="1024" height="576"></canvas>
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        <div id="matchInfo"></div>
     </div>
-
-    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
-    <script src="js/utils.js"></script>
-    <script src="js/classes.js"></script>
-    <script src="js/index.js"></script>
+    
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="js/game.js"></script>
+    <script>
+        const socket = io();
+        let gameState = 'lobby'; // lobby, playing
+        let currentMatch = null;
+        
+        function joinLobby() {
+            const nickname = document.getElementById('nicknameInput').value.trim();
+            if (nickname) {
+                socket.emit('joinLobby', { nickname: nickname });
+            }
+        }
+        
+        function challengePlayer(playerId) {
+            socket.emit('challengePlayer', playerId);
+        }
+        
+        socket.on('lobbyUpdate', (players) => {
+            const waitingList = document.getElementById('waitingList');
+            waitingList.innerHTML = '';
+            
+            players.forEach(player => {
+                if (player.id !== socket.id) {
+                    const playerElement = document.createElement('div');
+                    playerElement.className = 'waitingPlayer';
+                    playerElement.textContent = player.nickname;
+                    playerElement.onclick = () => challengePlayer(player.id);
+                    waitingList.appendChild(playerElement);
+                }
+            });
+        });
+        
+        socket.on('matchStart', (data) => {
+            gameState = 'playing';
+            currentMatch = data;
+            
+            document.getElementById('lobbyScreen').style.display = 'none';
+            document.getElementById('gameCanvas').style.display = 'block';
+            
+            // Инициализация игры с выбранными персонажами
+            initGame(data.yourCharacter, data.opponentCharacter);
+            
+            document.getElementById('matchInfo').textContent = 
+                `Противник: ${data.opponent} | Ваш персонаж: ${data.yourCharacter}`;
+        });
+        
+        socket.on('opponentMoved', (data) => {
+            // Обновление позиции противника
+            updateOpponentPosition(data);
+        });
+        
+        socket.on('opponentDisconnected', () => {
+            alert('Противник отключился');
+            returnToLobby();
+        });
+        
+        function returnToLobby() {
+            gameState = 'lobby';
+            currentMatch = null;
+            
+            document.getElementById('lobbyScreen').style.display = 'flex';
+            document.getElementById('gameCanvas').style.display = 'none';
+            document.getElementById('matchInfo').textContent = '';
+            
+            // Очистка игрового состояния
+            cleanupGame();
+        }
+        
+        function endMatch() {
+            socket.emit('matchEnd');
+            returnToLobby();
+        }
+    </script>
 </body>
 </html>
