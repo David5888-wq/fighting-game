@@ -12,8 +12,6 @@ const queueStatus = document.getElementById('queueStatus');
 let player;
 let enemy;
 let gameStarted = false;
-let timer = 60;
-let timerId;
 
 // Добавляем объекты фона и магазина
 const background = new Sprite({
@@ -49,11 +47,6 @@ socket.on('matchFound', (data) => {
     waitingScreen.classList.add('hidden');
     gameContainer.classList.remove('hidden');
     gameStarted = true;
-
-    // Сброс таймера
-    timer = 60;
-    clearTimeout(timerId);
-    document.querySelector('#timer').innerHTML = timer;
 
     // Создаем игроков
     player = new Fighter({
@@ -146,7 +139,6 @@ socket.on('matchFound', (data) => {
         }
     });
 
-    decreaseTimer();
     animate();
 });
 
@@ -286,19 +278,5 @@ function animate() {
     // Проверка окончания игры
     if (enemy.health <= 0 || player.health <= 0) {
         determineWinner({ player, enemy });
-    }
-}
-
-function decreaseTimer() {
-    if (gameStarted) {
-        timerId = setTimeout(() => {
-            timer--;
-            document.querySelector('#timer').innerHTML = timer;
-            if (timer <= 0) {
-                determineWinner({ player, enemy });
-            } else {
-                decreaseTimer();
-            }
-        }, 1000);
     }
 }
