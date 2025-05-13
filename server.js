@@ -47,13 +47,13 @@ const serverState = {
   characters: [           // Список персонажей
     {
       name: 'samurai',
-      imageSrc: './img/samuraiMack/Idle.png',
+      imageSrc: '/img/samuraiMack/Idle.png',
       offset: { x: 215, y: 157 },
       attackBox: { offset: { x: 100, y: 50 }, width: 160, height: 50 }
     },
     {
       name: 'kenji',
-      imageSrc: './img/kenji/Idle.png',
+      imageSrc: '/img/kenji/Idle.png',
       offset: { x: 215, y: 167 },
       attackBox: { offset: { x: -170, y: 50 }, width: 170, height: 50 }
     }

@@ -75,12 +75,12 @@ socket.on('gameStart', (gameData) => {
     // Инициализация фона
     background = new Sprite({
         position: { x: 0, y: 0 },
-        imageSrc: './img/background.png'
+        imageSrc: '/img/background.png'
     });
 
     shop = new Sprite({
         position: { x: 600, y: 128 },
-        imageSrc: './img/shop.png',
+        imageSrc: '/img/shop.png',
         scale: 2.75,
         framesMax: 6
     });
@@ -259,7 +259,7 @@ function createFighter(id, data, isEnemy) {
 
 // Получение спрайтов персонажа
 function getCharacterSprites(name) {
-    const basePath = `./img/${name}/`;
+    const basePath = `/img/${name}/`;
     return {
         idle: { imageSrc: basePath + 'Idle.png', framesMax: 8 },
         run: { imageSrc: basePath + 'Run.png', framesMax: 8 },
