@@ -69,7 +69,7 @@
   <button id="restart-btn" style="display: none;">Начать заново</button>
 
   <script>
-    // Автоматическое определение WebSocket URL
+    
     const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
     const wsUrl = wsProtocol + window.location.host;
     const ws = new WebSocket(wsUrl);
@@ -83,7 +83,7 @@
     let gameActive = false;
     const cells = [];
 
-    // Создание игрового поля
+    
     for (let i = 0; i < 9; i++) {
       const cell = document.createElement('div');
       cell.className = 'cell';
@@ -93,7 +93,7 @@
       cells.push(cell);
     }
 
-    // Обработчики WebSocket
+    
     ws.onopen = () => {
       statusEl.textContent = 'Подключено. Ожидаем другого игрока...';
     };

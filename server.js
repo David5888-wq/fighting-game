@@ -3,11 +3,10 @@ const http = require('http');
 const path = require('path');
 const fs = require('fs');
 
-// Конфигурация для Timeweb
-const PORT = process.env.PORT || 3000; // Timeweb использует переменную окружения PORT
-const HOST = '0.0.0.0'; // Слушаем все интерфейсы
+const PORT = process.env.PORT || 3000; 
+const HOST = '0.0.0.0'; 
 
-// Создаем HTTP-сервер
+
 const server = http.createServer((req, res) => {
   if (req.url === '/') {
     const filePath = path.join(__dirname, 'index.html');
@@ -25,7 +24,7 @@ const server = http.createServer((req, res) => {
   }
 });
 
-// WebSocket сервер
+
 const wss = new WebSocket.Server({ server });
 
 let clients = [];
