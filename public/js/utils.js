@@ -116,12 +116,3 @@ function createPulseAnimation() {
 
 // Инициализация анимации при загрузке
 createPulseAnimation();
-
-export {
-    rectangularCollision,
-    determineWinner,
-    updateTimer,
-    loadImage,
-    loadAllImages,
-    debug
-};
