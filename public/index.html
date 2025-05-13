@@ -1,37 +1,141 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Онлайн шашки</title>
-    <link rel="stylesheet" href="css/style.css">
+    <title>Fighting Game</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: "Press Start 2P", cursive;
+        }
+        
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #111;
+            overflow: hidden;
+        }
+        
+        .game-container {
+            position: relative;
+            display: inline-block;
+        }
+        
+        .game-ui {
+            position: absolute;
+            display: flex;
+            width: 100%;
+            align-items: center;
+            padding: 20px;
+            z-index: 10;
+        }
+        
+        .health-bar-container {
+            position: relative;
+            width: 100%;
+            height: 30px;
+            border: 4px solid white;
+        }
+        
+        .health-bar-background {
+            background-color: red;
+            height: 100%;
+            width: 100%;
+        }
+        
+        #playerHealth {
+            position: absolute;
+            background: #818cf8;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            width: 100%;
+        }
+        
+        #enemyHealth {
+            position: absolute;
+            background: #818cf8;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            left: 0;
+        }
+        
+        #timer {
+            background-color: black;
+            height: 50px;
+            width: 100px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            border: 4px solid white;
+        }
+        
+        #displayText {
+            position: absolute;
+            color: white;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            left: 0;
+            font-size: 48px;
+            z-index: 20;
+        }
+        
+        canvas {
+            border: 4px solid #333; /* Необязательная рамка */
+        }
+
+        body::after {
+        content: "";
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: url('img/12.png') no-repeat center center;
+        background-size: cover;
+        z-index: -1; /* Отправляем за всё содержимое */
+        }
+
+    </style>
 </head>
 <body>
-    <div id="login-screen" class="screen">
-        <h1>Онлайн шашки</h1>
-        <div class="login-form">
-            <input type="text" id="username" placeholder="Введите ваш ник">
-            <button id="start-game">Начать игру</button>
+    <div class="game-container">
+        <div class="game-ui">
+            <div class="health-bar-container" style="border-right: none;">
+                <div class="health-bar-background"></div>
+                <div id="playerHealth"></div>
+            </div>
+            
+            <div id="timer">60</div>
+            
+            <div class="health-bar-container" style="border-left: none;">
+                <div class="health-bar-background"></div>
+                <div id="enemyHealth"></div>
+            </div>
         </div>
+        
+        <div id="displayText">Tie</div>
+        <canvas width="1024" height="576"></canvas>
     </div>
 
-    <div id="waiting-screen" class="screen hidden">
-        <h2>Ожидание соперника</h2>
-        <div id="waiting-list">
-            <h3>Игроки в ожидании:</h3>
-            <ul id="players-list"></ul>
-        </div>
-    </div>
-
-    <div id="game-screen" class="screen hidden">
-        <div class="game-info">
-            <h2>Игра против <span id="opponent-name"></span></h2>
-            <p>Ваш ход: <span id="current-turn"></span></p>
-        </div>
-        <div id="board"></div>
-    </div>
-
-    <script src="/socket.io/socket.io.js"></script>
-    <script src="js/game.js"></script>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/classes.js"></script>
+    <script src="js/index.js"></script>
 </body>
-</html> 
+</html>

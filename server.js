@@ -1,81 +1,55 @@
 const express = require('express');
 const app = express();
 const http = require('http').createServer(app);
-const io = require('socket.io')(http);
+const io = require('socket.io')(http, { cors: { origin: '*' } });
+const PORT = 3000;
+const players = {};
 
 app.use(express.static('public'));
 
-const waitingPlayers = new Map();
-const activeGames = new Map();
-
 io.on('connection', (socket) => {
-    console.log('User connected:', socket.id);
+    console.log('Новый игрок подключён:', socket.id);
 
-    socket.on('register', (username) => {
-        socket.username = username;
-        waitingPlayers.set(socket.id, username);
-        io.emit('updateWaitingList', Array.from(waitingPlayers.values()));
-    });
+    // Определение цвета игрока
+    const color = Object.keys(players).length === 0 ? 'red' : 'blue';
+    
+    // Создание данных игрока
+    players[socket.id] = {
+        id: socket.id,
+        position: { x: color === 'red' ? 0 : 400, y: 0 },
+        velocity: { x: 0, y: 0 },
+        lastKey: null,
+        color: color
+    };
 
-    socket.on('challenge', (opponentUsername) => {
-        const opponentSocket = Array.from(waitingPlayers.entries())
-            .find(([_, username]) => username === opponentUsername)?.[0];
+    // Отправка данных текущему игроку
+    socket.emit('init', { color: color });
 
-        if (opponentSocket) {
-            const gameId = `${socket.id}-${opponentSocket}`;
-            activeGames.set(gameId, {
-                players: [socket.id, opponentSocket],
-                currentTurn: socket.id
-            });
+    // Уведомление других игроков о новом подключении
+    socket.broadcast.emit('newPlayer', players[socket.id]);
 
-            waitingPlayers.delete(socket.id);
-            waitingPlayers.delete(opponentSocket);
-            
-            io.to(opponentSocket).emit('gameStart', {
-                gameId,
-                opponent: socket.username,
-                isFirst: false
-            });
-            
-            socket.emit('gameStart', {
-                gameId,
-                opponent: waitingPlayers.get(opponentSocket),
-                isFirst: true
-            });
+    // Отправка списка игроков новому клиенту
+    socket.emit('currentPlayers', players);
 
-            io.emit('updateWaitingList', Array.from(waitingPlayers.values()));
+    // Обработка движения
+    socket.on('playerMovement', (movementData) => {
+        if (players[socket.id]) {
+            players[socket.id].position = movementData.position;
+            players[socket.id].velocity = movementData.velocity;
+            players[socket.id].lastKey = movementData.lastKey;
+            // Пересылка данных всем, кроме отправителя
+            socket.broadcast.emit('playerMoved', players[socket.id]);
         }
     });
 
-    socket.on('makeMove', (data) => {
-        const game = activeGames.get(data.gameId);
-        if (game && game.currentTurn === socket.id) {
-            const opponentId = game.players.find(id => id !== socket.id);
-            io.to(opponentId).emit('opponentMove', data.move);
-            game.currentTurn = opponentId;
-        }
-    });
-
+    // Обработка отключения
     socket.on('disconnect', () => {
-        if (waitingPlayers.has(socket.id)) {
-            waitingPlayers.delete(socket.id);
-            io.emit('updateWaitingList', Array.from(waitingPlayers.values()));
-        }
-        
-        // Обработка отключения во время игры
-        for (const [gameId, game] of activeGames.entries()) {
-            if (game.players.includes(socket.id)) {
-                const opponentId = game.players.find(id => id !== socket.id);
-                if (opponentId) {
-                    io.to(opponentId).emit('opponentDisconnected');
-                }
-                activeGames.delete(gameId);
-            }
-        }
+        console.log('Игрок отключён:', socket.id);
+        delete players[socket.id];
+        io.emit('playerDisconnected', socket.id);
     });
 });
 
-const PORT = process.env.PORT || 3000;
-http.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-}); 
+http.listen(PORT, '0.0.0.0', () => {
+    console.log(`Сервер доступен по адресу http://192.168.0.131:${PORT}`);
+});
