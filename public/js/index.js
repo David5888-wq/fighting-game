@@ -12,6 +12,8 @@ const queueStatus = document.getElementById('queueStatus');
 let player;
 let enemy;
 let gameStarted = false;
+let timer = 60;
+let timerId;
 
 // Добавляем объекты фона и магазина
 const background = new Sprite({
@@ -47,6 +49,11 @@ socket.on('matchFound', (data) => {
     waitingScreen.classList.add('hidden');
     gameContainer.classList.remove('hidden');
     gameStarted = true;
+
+    // Сброс таймера
+    timer = 60;
+    clearTimeout(timerId);
+    document.querySelector('#timer').innerHTML = timer;
 
     // Создаем игроков
     player = new Fighter({
@@ -139,6 +146,7 @@ socket.on('matchFound', (data) => {
         }
     });
 
+    decreaseTimer();
     animate();
 });
 
@@ -259,13 +267,13 @@ function animate() {
     enemy.update();
 
     // Проверка столкновений
-    if (detectCollision({ rectangle1: player, rectangle2: enemy }) &&
+    if (rectangularCollision({ rectangle1: player, rectangle2: enemy }) &&
         player.isAttacking && player.framesCurrent === 4) {
         player.isAttacking = false;
         enemy.takeHit();
     }
 
-    if (detectCollision({ rectangle1: enemy, rectangle2: player }) &&
+    if (rectangularCollision({ rectangle1: enemy, rectangle2: player }) &&
         enemy.isAttacking && enemy.framesCurrent === 2) {
         enemy.isAttacking = false;
         player.takeHit();
@@ -278,5 +286,19 @@ function animate() {
     // Проверка окончания игры
     if (enemy.health <= 0 || player.health <= 0) {
         determineWinner({ player, enemy });
+    }
+}
+
+function decreaseTimer() {
+    if (gameStarted) {
+        timerId = setTimeout(() => {
+            timer--;
+            document.querySelector('#timer').innerHTML = timer;
+            if (timer <= 0) {
+                determineWinner({ player, enemy });
+            } else {
+                decreaseTimer();
+            }
+        }, 1000);
     }
 }
