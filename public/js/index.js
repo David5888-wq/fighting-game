@@ -1,3 +1,4 @@
+const gravity = 0.7;
 const socket = io();
 
 const canvas = document.querySelector('canvas');
@@ -11,6 +12,23 @@ const queueStatus = document.getElementById('queueStatus');
 let player;
 let enemy;
 let gameStarted = false;
+
+// Добавляем объекты фона и магазина
+const background = new Sprite({
+    position: { x: 0, y: 0 },
+    imageSrc: 'img/background.png',
+    scale: 1,
+    framesMax: 1,
+    offset: { x: 0, y: 0 }
+});
+
+const shop = new Sprite({
+    position: { x: 600, y: 128 },
+    imageSrc: 'img/shop.png',
+    scale: 2.75,
+    framesMax: 6,
+    offset: { x: 0, y: 0 }
+});
 
 // Обработка поиска матча
 findMatchButton.addEventListener('click', () => {
@@ -209,6 +227,12 @@ function animate() {
     if (!gameStarted) return;
     requestAnimationFrame(animate);
     c.fillStyle = 'black';
+    c.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Рисуем фон и магазин
+    background.update();
+    shop.update();
+    c.fillStyle = 'rgba(255,255,255,0.15)';
     c.fillRect(0, 0, canvas.width, canvas.height);
 
     // Обновление позиции игрока
