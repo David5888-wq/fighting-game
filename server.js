@@ -1,151 +1,117 @@
-const WebSocket = require('ws');
-const http = require('http');
-const path = require('path');
-const fs = require('fs');
+const express = require('express');
+const app = express();
+const http = require('http').createServer(app);
+const io = require('socket.io')(http, { cors: { origin: '*' } });
+const PORT = 3000;
 
-const PORT = process.env.PORT || 3000; 
-const HOST = '0.0.0.0'; 
+const players = {};
+const waitingPlayers = [];
+const activeMatches = new Map();
 
+app.use(express.static('public'));
 
-const server = http.createServer((req, res) => {
-  if (req.url === '/') {
-    const filePath = path.join(__dirname, 'index.html');
-    fs.readFile(filePath, (err, data) => {
-      if (err) {
-        res.writeHead(500);
-        return res.end('Error loading index.html');
-      }
-      res.writeHead(200, { 'Content-Type': 'text/html' });
-      res.end(data);
+function createMatch(player1Id, player2Id) {
+    const matchId = `${player1Id}-${player2Id}`;
+    activeMatches.set(matchId, {
+        players: [player1Id, player2Id],
+        scores: { [player1Id]: 0, [player2Id]: 0 }
     });
-  } else {
-    res.writeHead(404);
-    res.end();
-  }
+    return matchId;
+}
+
+io.on('connection', (socket) => {
+    console.log('Новый игрок подключён:', socket.id);
+
+    // Добавление игрока в список ожидания
+    socket.on('joinQueue', () => {
+        if (waitingPlayers.includes(socket.id)) return;
+        
+        waitingPlayers.push(socket.id);
+        socket.emit('queueStatus', { position: waitingPlayers.length });
+        
+        // Если есть как минимум 2 игрока в очереди, создаем матч
+        if (waitingPlayers.length >= 2) {
+            const player1 = waitingPlayers.shift();
+            const player2 = waitingPlayers.shift();
+            
+            const matchId = createMatch(player1, player2);
+            
+            // Определение цветов игроков
+            players[player1] = { id: player1, color: 'red', position: { x: 0, y: 0 } };
+            players[player2] = { id: player2, color: 'blue', position: { x: 400, y: 0 } };
+            
+            // Уведомляем игроков о начале матча
+            io.to(player1).to(player2).emit('matchFound', {
+                matchId,
+                players: [player1, player2],
+                colors: { [player1]: 'red', [player2]: 'blue' }
+            });
+        }
+    });
+
+    // Обработка движения
+    socket.on('playerMovement', (movementData) => {
+        if (players[socket.id]) {
+            players[socket.id].position = movementData.position;
+            players[socket.id].velocity = movementData.velocity;
+            players[socket.id].lastKey = movementData.lastKey;
+            
+            // Находим текущий матч игрока
+            for (const [matchId, match] of activeMatches.entries()) {
+                if (match.players.includes(socket.id)) {
+                    // Отправляем обновление только игрокам в этом матче
+                    match.players.forEach(playerId => {
+                        if (playerId !== socket.id) {
+                            io.to(playerId).emit('playerMoved', players[socket.id]);
+                        }
+                    });
+                    break;
+                }
+            }
+        }
+    });
+
+    // Обработка удара
+    socket.on('playerAttack', (attackData) => {
+        for (const [matchId, match] of activeMatches.entries()) {
+            if (match.players.includes(socket.id)) {
+                match.players.forEach(playerId => {
+                    if (playerId !== socket.id) {
+                        io.to(playerId).emit('enemyAttack', attackData);
+                    }
+                });
+                break;
+            }
+        }
+    });
+
+    // Обработка отключения
+    socket.on('disconnect', () => {
+        console.log('Игрок отключён:', socket.id);
+        
+        // Удаляем из списка ожидания
+        const queueIndex = waitingPlayers.indexOf(socket.id);
+        if (queueIndex !== -1) {
+            waitingPlayers.splice(queueIndex, 1);
+        }
+        
+        // Удаляем из активных матчей
+        for (const [matchId, match] of activeMatches.entries()) {
+            if (match.players.includes(socket.id)) {
+                match.players.forEach(playerId => {
+                    if (playerId !== socket.id) {
+                        io.to(playerId).emit('opponentDisconnected');
+                    }
+                });
+                activeMatches.delete(matchId);
+                break;
+            }
+        }
+        
+        delete players[socket.id];
+    });
 });
 
-
-const wss = new WebSocket.Server({ server });
-
-let clients = [];
-let gameState = Array(9).fill(null);
-let currentPlayer = 'X';
-
-wss.on('connection', (ws) => {
-  if (clients.length >= 2) {
-    ws.send(JSON.stringify({ type: 'full', message: 'Сервер переполнен. Максимум 2 игрока.' }));
-    ws.close();
-    return;
-  }
-
-  clients.push(ws);
-  console.log('Новый игрок подключен. Всего:', clients.length);
-
-  const symbol = clients.length === 1 ? 'X' : 'O';
-  ws.send(JSON.stringify({ 
-    type: 'start',
-    symbol: symbol,
-    message: `Вы играете за ${symbol} (${symbol === 'X' ? 'ходите первым' : 'ожидайте хода'})`
-  }));
-
-  if (clients.length === 2) {
-    broadcast({ 
-      type: 'message', 
-      message: 'Оба игрока подключены! Игра начинается.' 
-    });
-  }
-
-  ws.on('message', (message) => {
-    try {
-      const msg = JSON.parse(message);
-      if (msg.type === 'move') {
-        handleMove(msg, ws);
-      }
-    } catch (e) {
-      console.error('Ошибка обработки сообщения:', e);
-    }
-  });
-
-  ws.on('close', () => {
-    console.log('Игрок отключился');
-    clients = clients.filter(client => client !== ws);
-    if (clients.length > 0) {
-      broadcast({ type: 'reset', message: 'Соперник отключился.' });
-    }
-    resetGame();
-  });
-});
-
-function handleMove(msg, ws) {
-  const { index, symbol } = msg;
-  
-  if (gameState[index] === null && symbol === currentPlayer) {
-    gameState[index] = symbol;
-    currentPlayer = symbol === 'X' ? 'O' : 'X';
-    
-    broadcast({ 
-      type: 'move', 
-      index, 
-      symbol,
-      currentPlayer 
-    });
-
-    checkGameStatus();
-  }
-}
-
-function broadcast(message) {
-  clients.forEach(client => {
-    if (client.readyState === WebSocket.OPEN) {
-      client.send(JSON.stringify(message));
-    }
-  });
-}
-
-function checkGameStatus() {
-  const winner = checkWin(gameState);
-  if (winner) {
-    broadcast({ 
-      type: 'gameover', 
-      winner,
-      message: `Игрок ${winner} победил!` 
-    });
-  } else if (gameState.every(cell => cell !== null)) {
-    broadcast({ 
-      type: 'gameover', 
-      winner: null,
-      message: 'Ничья!' 
-    });
-  }
-  
-  if (winner || gameState.every(cell => cell !== null)) {
-    setTimeout(resetGame, 3000);
-  }
-}
-
-function checkWin(board) {
-  const lines = [
-    [0,1,2], [3,4,5], [6,7,8],
-    [0,3,6], [1,4,7], [2,5,8],
-    [0,4,8], [2,4,6]
-  ];
-
-  for (const line of lines) {
-    const [a, b, c] = line;
-    if (board[a] && board[a] === board[b] && board[a] === board[c]) {
-      return board[a];
-    }
-  }
-  return null;
-}
-
-function resetGame() {
-  gameState = Array(9).fill(null);
-  currentPlayer = 'X';
-  broadcast({ type: 'reset' });
-  console.log('Игра сброшена');
-}
-
-server.listen(PORT, HOST, () => {
-  console.log(`Сервер запущен на http://${HOST}:${PORT}`);
+http.listen(PORT, '0.0.0.0', () => {
+    console.log(`Сервер доступен по адресу http://localhost:${PORT}`);
 });
