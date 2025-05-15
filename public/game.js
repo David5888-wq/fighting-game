@@ -1,8 +1,7 @@
 // game.js
-
 class YahtzeeGame {
     constructor() {
-        this.ws = new WebSocket('wss://' + window.location.host + '/ws');
+        this.ws = new WebSocket('ws://myfighting-game.ru:8080');
         this.playerId = null;
         this.gameId = null;
         this.currentPlayer = null;
@@ -23,23 +22,6 @@ class YahtzeeGame {
         this.setupControls();
         this.setupWebSocket();
         this.renderScoreTable();
-        this.setupGameActions();
-    }
-
-    setupGameActions() {
-        document.getElementById('create-game-btn').addEventListener('click', () => {
-            this.ws.send(JSON.stringify({ type: 'createGame' }));
-        });
-
-        document.getElementById('join-game-btn').addEventListener('click', () => {
-            const gameId = document.getElementById('game-id-input').value;
-            if (gameId) {
-                this.ws.send(JSON.stringify({ 
-                    type: 'joinGame',
-                    gameId: gameId
-                }));
-            }
-        });
     }
 
     setupDice() {
@@ -133,11 +115,11 @@ class YahtzeeGame {
         });
 
         // Update controls
-        document.getElementById('roll-btn').textContent = 
-            Бросить кубики (${this.rollsLeft});
-        document.getElementById('roll-btn').disabled = 
+        document.getElementById('roll-btn').textContent =
+            `Бросить кубики (${this.rollsLeft})`;
+        document.getElementById('roll-btn').disabled =
             this.rollsLeft === 0 || this.currentPlayer !== this.playerId;
-        document.getElementById('end-turn-btn').disabled = 
+        document.getElementById('end-turn-btn').disabled =
             this.currentPlayer !== this.playerId;
 
         // Update scores
@@ -161,17 +143,15 @@ class YahtzeeGame {
             const row = document.createElement('tr');
             row.innerHTML = `
                 <td>${combo}</td>
-                <td class="${this.scores.player[combo] ? 'available' : ''}">
+                <td class="${!this.scores.player[combo] ? 'available' : ''}">
                     ${this.scores.player[combo] || ''}
                 </td>
                 <td>${this.scores.opponent[combo] || ''}</td>
             `;
-            
             if (!this.scores.player[combo]) {
-                row.querySelector('td').addEventListener('click', () => 
+                row.querySelector('td:nth-child(2)').addEventListener('click', () =>
                     this.selectCombination(combo));
             }
-            
             tbody.appendChild(row);
         });
     }
