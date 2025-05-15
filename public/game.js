@@ -1,9 +1,8 @@
 // game.js
-const ws = new WebSocket('wss://myfighting-game.ru');
 
 class YahtzeeGame {
     constructor() {
-        this.ws = new WebSocket('ws://localhost:8080');
+        this.ws = new WebSocket('wss://' + window.location.host + '/ws');
         this.playerId = null;
         this.gameId = null;
         this.currentPlayer = null;
@@ -24,6 +23,23 @@ class YahtzeeGame {
         this.setupControls();
         this.setupWebSocket();
         this.renderScoreTable();
+        this.setupGameActions();
+    }
+
+    setupGameActions() {
+        document.getElementById('create-game-btn').addEventListener('click', () => {
+            this.ws.send(JSON.stringify({ type: 'createGame' }));
+        });
+
+        document.getElementById('join-game-btn').addEventListener('click', () => {
+            const gameId = document.getElementById('game-id-input').value;
+            if (gameId) {
+                this.ws.send(JSON.stringify({ 
+                    type: 'joinGame',
+                    gameId: gameId
+                }));
+            }
+        });
     }
 
     setupDice() {
@@ -131,7 +147,8 @@ class YahtzeeGame {
     getDiceSymbol(value) {
         return ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'][value - 1];
     }
-renderScoreTable() {
+
+    renderScoreTable() {
         const combinations = [
             'Единицы', 'Двойки', 'Тройки', 'Четверки', 'Пятерки', 'Шестерки',
             'Сет', 'Фулл хаус', 'Малый стрит', 'Большой стрит', 'Ятцзи', 'Шанс'
@@ -142,13 +159,13 @@ renderScoreTable() {
 
         combinations.forEach(combo => {
             const row = document.createElement('tr');
-            row.innerHTML = 
+            row.innerHTML = `
                 <td>${combo}</td>
-                <td class="${!this.scores.player[combo] ? 'available' : ''}">
+                <td class="${this.scores.player[combo] ? 'available' : ''}">
                     ${this.scores.player[combo] || ''}
                 </td>
                 <td>${this.scores.opponent[combo] || ''}</td>
-            ;
+            `;
             
             if (!this.scores.player[combo]) {
                 row.querySelector('td').addEventListener('click', () => 
