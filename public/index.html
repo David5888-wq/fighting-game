@@ -1,32 +1,60 @@
-<!-- index.html -->
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Онлайн Ятцзи</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="game-container">
+        <h1>Онлайн Ятцзи</h1>
+        
+        <div class="game-actions">
+            <button id="create-game-btn">Создать игру</button>
+            <div class="join-game">
+                <input type="text" id="game-id-input" placeholder="ID игры">
+                <button id="join-game-btn">Присоединиться</button>
+            </div>
+        </div>
+        
         <div class="game-info">
-            <div id="game-status">Ожидание соперника...</div>
+            <div id="game-status">Ожидание действий...</div>
             <div id="current-player"></div>
             <div class="dice-container" id="dice-container"></div>
             <div class="controls">
-                <button id="roll-btn">Бросить кубики (3)</button>
+                <button id="roll-btn" disabled>Бросить кубики (3)</button>
                 <button id="end-turn-btn" disabled>Завершить ход</button>
             </div>
         </div>
         
-        <table class="score-table">
-            <thead>
-                <tr>
-                    <th>Комбинация</th>
-                    <th>Вы</th>
-                    <th>Соперник</th>
-                </tr>
-            </thead>
-            <tbody id="score-body"></tbody>
-        </table>
+        <div class="game-content">
+            <table class="score-table">
+                <thead>
+                    <tr>
+                        <th>Комбинация</th>
+                        <th>Вы</th>
+                        <th>Соперник</th>
+                    </tr>
+                </thead>
+                <tbody id="score-body"></tbody>
+                <tfoot>
+                    <tr>
+                        <th>Итого:</th>
+                        <th id="player-total">0</th>
+                        <th id="opponent-total">0</th>
+                    </tr>
+                </tfoot>
+            </table>
+            
+            <div class="chat-container">
+                <div class="chat-messages" id="chat-messages"></div>
+                <div class="chat-input">
+                    <input type="text" id="chat-input" placeholder="Сообщение">
+                    <button id="send-chat-btn">Отправить</button>
+                </div>
+            </div>
+        </div>
     </div>
     <script src="game.js"></script>
 </body>
