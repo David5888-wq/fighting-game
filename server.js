@@ -1,19 +1,6 @@
 // server.js (Node.js)
 const WebSocket = require('ws');
-const express = require('express');
-const path = require('path');
-
-const app = express();
-const PORT = process.env.PORT || 8080;
-
-
-app.use(express.static(path.join(__dirname, 'public')));
-
-const server = app.listen(PORT, () => {
-    console.log(`Server is running on http://localhost:${PORT}`);
-});
-
-const wss = new WebSocket.Server({ server });
+const wss = new WebSocket.Server({ port: 8080 });
 
 const games = new Map();
 
