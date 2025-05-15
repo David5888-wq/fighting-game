@@ -1,6 +1,35 @@
 // server.js (Node.js)
 const WebSocket = require('ws');
-const wss = new WebSocket.Server({ port: 8080 });
+const express = require('express');
+const path = require('path');
+const fs = require('fs');
+const https = require('https');
+
+const app = express();
+const PORT = 443; // HTTPS использует порт 443
+
+// SSL-сертификаты (нужно загрузить их на сервер)
+const privateKey = fs.readFileSync('/etc/ssl/private/your-private.key', 'utf8');
+const certificate = fs.readFileSync('/etc/ssl/certs/your-certificate.crt', 'utf8');
+const ca = fs.readFileSync('/etc/ssl/certs/your-ca-bundle.crt', 'utf8');
+
+const credentials = {
+    key: privateKey,
+    cert: certificate,
+    ca: ca
+};
+
+// Отдача статических файлов
+app.use(express.static(path.join(__dirname, 'public')));
+
+// HTTPS-сервер
+const server = https.createServer(credentials, app);
+server.listen(PORT, () => {
+    console.log(`Server is running on https://myfighting-game.ru`);
+});
+
+// WebSocket-сервер
+const wss = new WebSocket.Server({ server });
 
 const games = new Map();
 

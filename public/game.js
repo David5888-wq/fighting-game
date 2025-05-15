@@ -1,4 +1,6 @@
 // game.js
+const ws = new WebSocket('wss://myfighting-game.ru');
+
 class YahtzeeGame {
     constructor() {
         this.ws = new WebSocket('ws://localhost:8080');
