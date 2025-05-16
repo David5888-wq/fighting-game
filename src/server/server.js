@@ -31,41 +31,50 @@ io.on('connection', (socket) => {
     // Добавление игрока в список ожидания
     socket.on('joinQueue', (data) => {
         if (waitingPlayers.includes(socket.id)) return;
-        
         players[socket.id] = {
             id: socket.id,
             name: data.name
         };
-        
         waitingPlayers.push(socket.id);
         socket.emit('queueStatus', { position: waitingPlayers.length });
-        
-        // Отправляем список ожидающих игроков всем
+        // Отправляем список ожидающих всем
         io.emit('waitingPlayers', waitingPlayers.map(id => ({
             id,
             name: players[id].name
         })));
-        
-        // Если есть как минимум 2 игрока в очереди, создаем матч
-        if (waitingPlayers.length >= 2) {
-            const player1 = waitingPlayers.shift();
-            const player2 = waitingPlayers.shift();
-            
-            const matchId = createMatch(player1, player2);
-            
-            // Уведомляем игроков о начале матча
-            io.to(player1).to(player2).emit('matchFound', {
+    });
+
+    // Новое событие: приглашение в игру
+    socket.on('inviteToGame', (data) => {
+        const inviterId = socket.id;
+        const invitedId = data.invitedId;
+        // Проверяем, что оба в списке ожидания
+        if (
+            waitingPlayers.includes(inviterId) &&
+            waitingPlayers.includes(invitedId)
+        ) {
+            // Удаляем обоих из очереди
+            waitingPlayers.splice(waitingPlayers.indexOf(inviterId), 1);
+            waitingPlayers.splice(waitingPlayers.indexOf(invitedId), 1);
+            // Создаём матч
+            const matchId = createMatch(inviterId, invitedId);
+            // Уведомляем игроков
+            io.to(inviterId).to(invitedId).emit('matchFound', {
                 matchId,
-                players: [player1, player2],
+                players: [inviterId, invitedId],
                 names: {
-                    [player1]: players[player1].name,
-                    [player2]: players[player2].name
+                    [inviterId]: players[inviterId].name,
+                    [invitedId]: players[invitedId].name
                 }
             });
-
             // Отправляем начальное состояние игры
             const gameState = activeMatches.get(matchId);
-            io.to(player1).to(player2).emit('gameState', gameState);
+            io.to(inviterId).to(invitedId).emit('gameState', gameState);
+            // Обновляем список ожидания для всех
+            io.emit('waitingPlayers', waitingPlayers.map(id => ({
+                id,
+                name: players[id].name
+            })));
         }
     });
 

@@ -58,6 +58,10 @@ class YahtzeeGame {
             document.getElementById('queueStatus').textContent = `Позиция в очереди: ${data.position}`;
         });
 
+        this.socket.on('waitingPlayers', (players) => {
+            this.renderWaitingPlayers(players);
+        });
+
         this.socket.on('matchFound', (data) => {
             this.playerId = this.socket.id;
             this.opponentId = data.players.find(id => id !== this.playerId);
@@ -253,6 +257,23 @@ class YahtzeeGame {
 
         document.getElementById('rollButton').disabled = !this.isMyTurn || this.rollsLeft <= 0;
         document.getElementById('endTurnButton').disabled = !this.isMyTurn || this.rollsLeft > 0;
+    }
+
+    renderWaitingPlayers(players) {
+        const container = document.getElementById('waitingPlayers');
+        container.innerHTML = '';
+        players.forEach(player => {
+            if (player.id !== this.socket.id) {
+                const div = document.createElement('div');
+                div.textContent = player.name;
+                div.className = 'waiting-player';
+                div.style.cursor = 'pointer';
+                div.onclick = () => {
+                    this.socket.emit('inviteToGame', { invitedId: player.id });
+                };
+                container.appendChild(div);
+            }
+        });
     }
 }
 

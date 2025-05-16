@@ -218,4 +218,19 @@ th {
 
 .dice.rolling {
     animation: roll 0.5s ease-in-out;
+}
+
+.waiting-player {
+    background: rgba(255,255,255,0.08);
+    margin: 0.5rem 0;
+    padding: 0.7rem 1rem;
+    border-radius: 8px;
+    transition: background 0.2s;
+    color: #fff;
+    font-size: 1.1rem;
+}
+.waiting-player:hover {
+    background: #4CAF50;
+    color: #fff;
+    cursor: pointer;
 } 
