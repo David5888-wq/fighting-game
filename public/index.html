@@ -3,59 +3,145 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Онлайн Ятцзи</title>
-    <link rel="stylesheet" href="style.css">
+    <title>Ятцзи</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="client/styles.css">
 </head>
 <body>
-    <div class="game-container">
-        <h1>Онлайн Ятцзи</h1>
-        
-        <div class="game-actions">
-            <button id="create-game-btn">Создать игру</button>
-            <div class="join-game">
-                <input type="text" id="game-id-input" placeholder="ID игры">
-                <button id="join-game-btn">Присоединиться</button>
+    <div id="waitingScreen">
+        <div class="waiting-container">
+            <h2>Ятцзи</h2>
+            <input type="text" id="playerName" placeholder="Введите ваше имя">
+            <button id="findMatchButton">Найти игру</button>
+            <div id="queueStatus"></div>
+            <div id="waitingPlayers"></div>
+        </div>
+    </div>
+
+    <div id="gameScreen" class="hidden">
+        <div class="game-header">
+            <div class="player-info">
+                <span id="player1Name"></span>
+                <span id="player1Score">0</span>
+            </div>
+            <div class="player-info">
+                <span id="player2Name"></span>
+                <span id="player2Score">0</span>
             </div>
         </div>
-        
-        <div class="game-info">
-            <div id="game-status">Ожидание действий...</div>
-            <div id="current-player"></div>
-            <div class="dice-container" id="dice-container"></div>
-            <div class="controls">
-                <button id="roll-btn" disabled>Бросить кубики (3)</button>
-                <button id="end-turn-btn" disabled>Завершить ход</button>
-            </div>
-        </div>
-        
+
         <div class="game-content">
-            <table class="score-table">
-                <thead>
-                    <tr>
-                        <th>Комбинация</th>
-                        <th>Вы</th>
-                        <th>Соперник</th>
-                    </tr>
-                </thead>
-                <tbody id="score-body"></tbody>
-                <tfoot>
-                    <tr>
-                        <th>Итого:</th>
-                        <th id="player-total">0</th>
-                        <th id="opponent-total">0</th>
-                    </tr>
-                </tfoot>
-            </table>
-            
-            <div class="chat-container">
-                <div class="chat-messages" id="chat-messages"></div>
-                <div class="chat-input">
-                    <input type="text" id="chat-input" placeholder="Сообщение">
-                    <button id="send-chat-btn">Отправить</button>
+            <div class="dice-container">
+                <div class="dice" id="dice1">
+                    <div class="dice-face"></div>
+                    <button class="lock-button" data-dice="1">🔒</button>
                 </div>
+                <div class="dice" id="dice2">
+                    <div class="dice-face"></div>
+                    <button class="lock-button" data-dice="2">🔒</button>
+                </div>
+                <div class="dice" id="dice3">
+                    <div class="dice-face"></div>
+                    <button class="lock-button" data-dice="3">🔒</button>
+                </div>
+                <div class="dice" id="dice4">
+                    <div class="dice-face"></div>
+                    <button class="lock-button" data-dice="4">🔒</button>
+                </div>
+                <div class="dice" id="dice5">
+                    <div class="dice-face"></div>
+                    <button class="lock-button" data-dice="5">🔒</button>
+                </div>
+            </div>
+
+            <div class="controls">
+                <button id="rollButton">Бросить кубики</button>
+                <button id="endTurnButton" disabled>Завершить ход</button>
+                <div id="rollsLeft">Осталось бросков: 3</div>
+            </div>
+
+            <div class="score-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Комбинация</th>
+                            <th id="player1Header">Игрок 1</th>
+                            <th id="player2Header">Игрок 2</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr data-combination="ones">
+                            <td>Единицы</td>
+                            <td class="score-cell" data-player="1"></td>
+                            <td class="score-cell" data-player="2"></td>
+                        </tr>
+                        <tr data-combination="twos">
+                            <td>Двойки</td>
+                            <td class="score-cell" data-player="1"></td>
+                            <td class="score-cell" data-player="2"></td>
+                        </tr>
+                        <tr data-combination="threes">
+                            <td>Тройки</td>
+                            <td class="score-cell" data-player="1"></td>
+                            <td class="score-cell" data-player="2"></td>
+                        </tr>
+                        <tr data-combination="fours">
+                            <td>Четверки</td>
+                            <td class="score-cell" data-player="1"></td>
+                            <td class="score-cell" data-player="2"></td>
+                        </tr>
+                        <tr data-combination="fives">
+                            <td>Пятерки</td>
+                            <td class="score-cell" data-player="1"></td>
+                            <td class="score-cell" data-player="2"></td>
+                        </tr>
+                        <tr data-combination="sixes">
+                            <td>Шестерки</td>
+                            <td class="score-cell" data-player="1"></td>
+                            <td class="score-cell" data-player="2"></td>
+                        </tr>
+                        <tr data-combination="threeOfAKind">
+                            <td>Тройка</td>
+                            <td class="score-cell" data-player="1"></td>
+                            <td class="score-cell" data-player="2"></td>
+                        </tr>
+                        <tr data-combination="fourOfAKind">
+                            <td>Каре</td>
+                            <td class="score-cell" data-player="1"></td>
+                            <td class="score-cell" data-player="2"></td>
+                        </tr>
+                        <tr data-combination="fullHouse">
+                            <td>Фулл-хаус</td>
+                            <td class="score-cell" data-player="1"></td>
+                            <td class="score-cell" data-player="2"></td>
+                        </tr>
+                        <tr data-combination="smallStraight">
+                            <td>Малый стрит</td>
+                            <td class="score-cell" data-player="1"></td>
+                            <td class="score-cell" data-player="2"></td>
+                        </tr>
+                        <tr data-combination="largeStraight">
+                            <td>Большой стрит</td>
+                            <td class="score-cell" data-player="1"></td>
+                            <td class="score-cell" data-player="2"></td>
+                        </tr>
+                        <tr data-combination="yahtzee">
+                            <td>Ятцзи</td>
+                            <td class="score-cell" data-player="1"></td>
+                            <td class="score-cell" data-player="2"></td>
+                        </tr>
+                        <tr data-combination="chance">
+                            <td>Шанс</td>
+                            <td class="score-cell" data-player="1"></td>
+                            <td class="score-cell" data-player="2"></td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>
-    <script src="game.js"></script>
+
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="client/game.js"></script>
 </body>
-</html>
+</html> 

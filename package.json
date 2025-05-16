@@ -1,12 +1,13 @@
 {
-  "name": "fighting-game",
+  "name": "yahtzee-game",
   "version": "1.0.0",
-  "description": "Онлайн Ятцзи (Yahtzee) на Node.js и WebSocket",
-  "main": "server.js",
+  "description": "Многопользовательская игра Ятцзи",
+  "main": "src/server/server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node src/server/server.js"
   },
   "dependencies": {
-    "ws": "^8.13.0"
+    "express": "^4.18.2",
+    "socket.io": "^4.7.2"
   }
 } 
