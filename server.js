@@ -145,9 +145,12 @@ wss.on('connection', (ws) => {
                     const playerIndex = game.players.indexOf(ws);
                     const playerKey = playerIndex === 0 ? 'player1' : 'player2';
                     const score = calculateScore(game.dice, payload.combination);
-                    
+
+                    // Не даём выбрать одну и ту же комбинацию дважды
+                    if (game.scores[playerKey][payload.combination] !== undefined) return;
+
                     game.scores[playerKey][payload.combination] = score;
-                    
+
                     // Отправляем обновление обоим игрокам
                     game.players.forEach(player => {
                         if (player.readyState === WebSocket.OPEN) {
@@ -160,23 +163,40 @@ wss.on('connection', (ws) => {
                             }));
                         }
                     });
-                    
-                    // Проверяем, закончилась ли игра
+
+                    // Передаём ход другому игроку
+                    game.currentPlayer = game.players.find(p => p !== ws);
+                    game.rollsLeft = 3;
+                    game.dice = [1, 1, 1, 1, 1];
+
+                    game.players.forEach(player => {
+                        if (player.readyState === WebSocket.OPEN) {
+                            player.send(JSON.stringify({
+                                type: 'game',
+                                payload: {
+                                    type: 'turn',
+                                    isMyTurn: player === game.currentPlayer
+                                }
+                            }));
+                        }
+                    });
+
+                    // Проверяем конец игры
                     const allCombinations = ['ones', 'twos', 'threes', 'fours', 'fives', 'sixes',
-                                          'three-of-a-kind', 'four-of-a-kind', 'full-house',
-                                          'small-straight', 'large-straight', 'yatzy', 'chance'];
-                    
-                    const gameOver = allCombinations.every(combination => 
-                        game.scores.player1[combination] !== undefined && 
+                        'three-of-a-kind', 'four-of-a-kind', 'full-house',
+                        'small-straight', 'large-straight', 'yatzy', 'chance'];
+
+                    const gameOver = allCombinations.every(combination =>
+                        game.scores.player1[combination] !== undefined &&
                         game.scores.player2[combination] !== undefined
                     );
-                    
+
                     if (gameOver) {
                         const player1Score = Object.values(game.scores.player1).reduce((a, b) => a + b, 0);
                         const player2Score = Object.values(game.scores.player2).reduce((a, b) => a + b, 0);
-                        const winner = player1Score > player2Score ? game.players[0].username : 
-                                     player1Score < player2Score ? game.players[1].username : 'Ничья';
-                        
+                        const winner = player1Score > player2Score ? game.players[0].username :
+                            player1Score < player2Score ? game.players[1].username : 'Ничья';
+
                         game.players.forEach(player => {
                             if (player.readyState === WebSocket.OPEN) {
                                 player.send(JSON.stringify({
@@ -185,7 +205,7 @@ wss.on('connection', (ws) => {
                                 }));
                             }
                         });
-                        
+
                         delete games[data.gameId];
                     }
                 }

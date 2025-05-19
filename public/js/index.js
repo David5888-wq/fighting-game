@@ -29,6 +29,9 @@ let gameState = {
     }
 };
 
+// Добавляем определение, кто вы: player1 или player2
+let myPlayerKey = null;
+
 // Обработка подключения к серверу
 ws.onopen = () => {
     console.log('Подключено к серверу');
@@ -95,6 +98,7 @@ function startGame(data) {
     gameState.opponent = data.opponent;
     gameState.gameId = data.gameId;
     gameState.isMyTurn = data.first;
+    myPlayerKey = data.first ? 'player1' : 'player2';
     
     lobbyDiv.style.display = 'none';
     gameDiv.style.display = 'block';
@@ -221,13 +225,35 @@ function toggleDiceLock(index) {
     }
 }
 
+// Обработка выбора комбинации (клик по ячейке таблицы)
+tableBody.addEventListener('click', function (e) {
+    const cell = e.target;
+    if (
+        cell.classList.contains('score-cell') &&
+        gameState.isMyTurn &&
+        !cell.classList.contains('filled')
+    ) {
+        const combination = cell.dataset.combination;
+        ws.send(JSON.stringify({
+            type: 'game',
+            gameId: gameState.gameId,
+            payload: {
+                type: 'select_combination',
+                combination: combination
+            }
+        }));
+    }
+});
+
 // Обновление таблицы очков
 function updateScoreTable() {
     const cells = document.querySelectorAll('.score-cell');
     cells.forEach(cell => {
         const combination = cell.dataset.combination;
         const player = cell.dataset.player;
-        const score = gameState.scores[`player${player}`][combination];
+        // Корректно отображаем очки для player1/player2
+        let key = player === '1' ? 'player1' : 'player2';
+        const score = gameState.scores[key][combination];
         cell.textContent = score !== undefined ? score : '';
         cell.className = `score-cell ${score !== undefined ? 'filled' : ''}`;
     });
