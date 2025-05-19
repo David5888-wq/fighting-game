@@ -2,146 +2,49 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ятцзи</title>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="client/styles.css">
+    <title>Ятцы онлайн</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div id="waitingScreen">
-        <div class="waiting-container">
-            <h2>Ятцзи</h2>
-            <input type="text" id="playerName" placeholder="Введите ваше имя">
-            <button id="findMatchButton">Найти игру</button>
-            <div id="queueStatus"></div>
-            <div id="waitingPlayers"></div>
-        </div>
+    <div id="login">
+        <h2>Введите ваш ник:</h2>
+        <input type="text" id="username" maxlength="12">
+        <button id="joinBtn">Войти</button>
     </div>
-
-    <div id="gameScreen" class="hidden">
-        <div class="game-header">
-            <div class="player-info">
-                <span id="player1Name"></span>
-                <span id="player1Score">0</span>
-            </div>
-            <div class="player-info">
-                <span id="player2Name"></span>
-                <span id="player2Score">0</span>
-            </div>
-        </div>
-
-        <div class="game-content">
-            <div class="dice-container">
-                <div class="dice" id="dice1">
-                    <div class="dice-face"></div>
-                    <button class="lock-button" data-dice="1">🔒</button>
-                </div>
-                <div class="dice" id="dice2">
-                    <div class="dice-face"></div>
-                    <button class="lock-button" data-dice="2">🔒</button>
-                </div>
-                <div class="dice" id="dice3">
-                    <div class="dice-face"></div>
-                    <button class="lock-button" data-dice="3">🔒</button>
-                </div>
-                <div class="dice" id="dice4">
-                    <div class="dice-face"></div>
-                    <button class="lock-button" data-dice="4">🔒</button>
-                </div>
-                <div class="dice" id="dice5">
-                    <div class="dice-face"></div>
-                    <button class="lock-button" data-dice="5">🔒</button>
-                </div>
-            </div>
-
-            <div class="controls">
-                <button id="rollButton">Бросить кубики</button>
-                <button id="endTurnButton" disabled>Завершить ход</button>
-                <div id="rollsLeft">Осталось бросков: 3</div>
-            </div>
-
-            <div class="score-table">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Комбинация</th>
-                            <th id="player1Header">Игрок 1</th>
-                            <th id="player2Header">Игрок 2</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr data-combination="ones">
-                            <td>Единицы</td>
-                            <td class="score-cell" data-player="1"></td>
-                            <td class="score-cell" data-player="2"></td>
-                        </tr>
-                        <tr data-combination="twos">
-                            <td>Двойки</td>
-                            <td class="score-cell" data-player="1"></td>
-                            <td class="score-cell" data-player="2"></td>
-                        </tr>
-                        <tr data-combination="threes">
-                            <td>Тройки</td>
-                            <td class="score-cell" data-player="1"></td>
-                            <td class="score-cell" data-player="2"></td>
-                        </tr>
-                        <tr data-combination="fours">
-                            <td>Четверки</td>
-                            <td class="score-cell" data-player="1"></td>
-                            <td class="score-cell" data-player="2"></td>
-                        </tr>
-                        <tr data-combination="fives">
-                            <td>Пятерки</td>
-                            <td class="score-cell" data-player="1"></td>
-                            <td class="score-cell" data-player="2"></td>
-                        </tr>
-                        <tr data-combination="sixes">
-                            <td>Шестерки</td>
-                            <td class="score-cell" data-player="1"></td>
-                            <td class="score-cell" data-player="2"></td>
-                        </tr>
-                        <tr data-combination="threeOfAKind">
-                            <td>Тройка</td>
-                            <td class="score-cell" data-player="1"></td>
-                            <td class="score-cell" data-player="2"></td>
-                        </tr>
-                        <tr data-combination="fourOfAKind">
-                            <td>Каре</td>
-                            <td class="score-cell" data-player="1"></td>
-                            <td class="score-cell" data-player="2"></td>
-                        </tr>
-                        <tr data-combination="fullHouse">
-                            <td>Фулл-хаус</td>
-                            <td class="score-cell" data-player="1"></td>
-                            <td class="score-cell" data-player="2"></td>
-                        </tr>
-                        <tr data-combination="smallStraight">
-                            <td>Малый стрит</td>
-                            <td class="score-cell" data-player="1"></td>
-                            <td class="score-cell" data-player="2"></td>
-                        </tr>
-                        <tr data-combination="largeStraight">
-                            <td>Большой стрит</td>
-                            <td class="score-cell" data-player="1"></td>
-                            <td class="score-cell" data-player="2"></td>
-                        </tr>
-                        <tr data-combination="yahtzee">
-                            <td>Ятцзи</td>
-                            <td class="score-cell" data-player="1"></td>
-                            <td class="score-cell" data-player="2"></td>
-                        </tr>
-                        <tr data-combination="chance">
-                            <td>Шанс</td>
-                            <td class="score-cell" data-player="1"></td>
-                            <td class="score-cell" data-player="2"></td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
+    <div id="lobby" style="display:none;">
+        <h2>Лобби ожидания</h2>
+        <ul id="players"></ul>
+        <p>Ожидание соперника...</p>
     </div>
-
-    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
-    <script src="client/game.js"></script>
+    <div id="game" style="display:none;">
+        <div id="scoreboard">
+            <span id="player1"></span>: <span id="score1">0</span> | 
+            <span id="player2"></span>: <span id="score2">0</span>
+        </div>
+        <div id="turnInfo"></div>
+        <div id="diceArea">
+            <div id="dice"></div>
+            <div id="locks"></div>
+        </div>
+        <div>
+            <button id="rollBtn">Бросить кубики</button>
+            <button id="endTurnBtn">Завершить ход</button>
+            <span id="rollsLeft"></span>
+        </div>
+        <h3>Таблица комбинаций</h3>
+        <table id="scoreTable">
+            <thead>
+                <tr>
+                    <th>Комбинация</th>
+                    <th id="th1"></th>
+                    <th id="th2"></th>
+                </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+        </table>
+    </div>
+    <script src="js/utils.js"></script>
+    <script src="js/classes.js"></script>
+    <script src="js/index.js"></script>
 </body>
-</html> 
+</html>

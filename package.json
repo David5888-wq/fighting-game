@@ -1,13 +1,13 @@
 {
-  "name": "yahtzee-game",
+  "name": "yatzy-multiplayer",
   "version": "1.0.0",
-  "description": "Многопользовательская игра Ятцзи",
-  "main": "src/server/server.js",
+  "description": "Многопользовательская игра Ятцы",
+  "main": "server.js",
   "scripts": {
-    "start": "node src/server/server.js"
+    "start": "node server.js"
   },
   "dependencies": {
     "express": "^4.18.2",
-    "socket.io": "^4.7.2"
+    "ws": "^8.13.0"
   }
-} 
+}
