@@ -93,14 +93,16 @@ ws.onmessage = (event) => {
 function updateLobby(players) {
     playersList.innerHTML = '';
     const otherPlayers = players.filter(player => player !== gameState.username);
-    
+
+    // Безопасно ищем элемент
+    const waitingMsg = document.querySelector('.waiting-message');
     if (otherPlayers.length === 0) {
-        document.querySelector('.waiting-message').textContent = 'Ожидание игроков...';
+        if (waitingMsg) waitingMsg.textContent = 'Ожидание игроков...';
         return;
     }
 
-    document.querySelector('.waiting-message').textContent = 'Выберите соперника:';
-    
+    if (waitingMsg) waitingMsg.textContent = 'Выберите соперника:';
+
     otherPlayers.forEach(player => {
         const li = document.createElement('li');
         li.textContent = player;
