@@ -1,13 +1,5 @@
 {
-  "name": "yatzy-online",
-  "version": "1.0.0",
-  "description": "Многопользовательская онлайн-игра Ятцы",
-  "main": "сервер/server.js",
-  "scripts": {
-    "start": "node сервер/server.js"
-  },
   "dependencies": {
-    "express": "^4.18.2",
-    "ws": "^8.13.0"
+    "ws": "^8.18.2"
   }
-} 
+}
