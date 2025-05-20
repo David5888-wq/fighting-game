@@ -170,15 +170,16 @@
     }
 
     function handleOpponentMove(msg) {
-      const choiceElement = document.querySelector(`[data-choice="${msg.choice}"]`);
       if (msg.playerNumber === 1) {
-        player1Choice.textContent = choiceEmojis[msg.choice];
+        player1Choice.textContent = '?';
       } else {
-        player2Choice.textContent = choiceEmojis[msg.choice];
+        player2Choice.textContent = '?';
       }
     }
 
     function handleGameOver(msg) {
+      player1Choice.textContent = choiceEmojis[msg.player1Choice];
+      player2Choice.textContent = choiceEmojis[msg.player2Choice];
       updateStatus(msg.message);
       gameActive = false;
       restartBtn.style.display = 'block';
