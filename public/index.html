@@ -2,47 +2,79 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Ятцы онлайн</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ятцы онлайн - Мультиплеер</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div id="login">
-        <h2>Введите ваш ник:</h2>
-        <input type="text" id="username" maxlength="12">
-        <button id="joinBtn">Войти</button>
+        <h1>Ятцы онлайн</h1>
+        <div class="login-form">
+            <h2>Введите ваш никнейм:</h2>
+            <input type="text" id="username" placeholder="Ваш ник (макс. 12 символов)" maxlength="12">
+            <button id="joinBtn">Присоединиться</button>
+        </div>
     </div>
+
     <div id="lobby" style="display:none;">
-        <h2>Лобби ожидания</h2>
-        <ul id="players"></ul>
-        <p>Ожидание соперника...</p>
+        <div class="lobby-container">
+            <h2>Лобби игроков</h2>
+            <p>Выберите соперника из списка:</p>
+            <ul id="players"></ul>
+            <p class="waiting-message">Ожидание игроков...</p>
+        </div>
     </div>
+
     <div id="game" style="display:none;">
-        <div id="scoreboard">
-            <span id="player1"></span>: <span id="score1">0</span> | 
-            <span id="player2"></span>: <span id="score2">0</span>
+        <div class="game-header">
+            <div id="scoreboard">
+                <div class="player-score">
+                    <span id="player1" class="player-name"></span>: 
+                    <span id="score1" class="score-value">0</span>
+                </div>
+                <div class="vs">vs</div>
+                <div class="player-score">
+                    <span id="player2" class="player-name"></span>: 
+                    <span id="score2" class="score-value">0</span>
+                </div>
+            </div>
+            <div id="turnInfo" class="turn-info"></div>
         </div>
-        <div id="turnInfo"></div>
-        <div id="diceArea">
-            <div id="dice"></div>
-            <div id="locks"></div>
+
+        <div class="game-area">
+            <div id="diceArea">
+                <div id="dice" class="dice-container"></div>
+                <div class="dice-controls">
+                    <button id="rollBtn" class="control-btn">Бросить кубики</button>
+                    <span id="rollsLeft" class="rolls-counter"></span>
+                    <button id="endTurnBtn" class="control-btn">Завершить ход</button>
+                </div>
+            </div>
+
+            <div class="combinations-table">
+                <h3>Таблица комбинаций</h3>
+                <table id="scoreTable">
+                    <thead>
+                        <tr>
+                            <th>Комбинация</th>
+                            <th id="th1"></th>
+                            <th id="th2"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody"></tbody>
+                </table>
+            </div>
         </div>
-        <div>
-            <button id="rollBtn">Бросить кубики</button>
-            <button id="endTurnBtn">Завершить ход</button>
-            <span id="rollsLeft"></span>
-        </div>
-        <h3>Таблица комбинаций</h3>
-        <table id="scoreTable">
-            <thead>
-                <tr>
-                    <th>Комбинация</th>
-                    <th id="th1"></th>
-                    <th id="th2"></th>
-                </tr>
-            </thead>
-            <tbody id="tableBody"></tbody>
-        </table>
     </div>
+
+    <div id="gameOverModal" style="display:none;">
+        <div class="modal-content">
+            <h2 id="gameOverText"></h2>
+            <div id="finalScores"></div>
+            <button id="playAgainBtn">Играть снова</button>
+        </div>
+    </div>
+
     <script src="js/utils.js"></script>
     <script src="js/classes.js"></script>
     <script src="js/index.js"></script>
