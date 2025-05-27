@@ -7,11 +7,6 @@ const fs = require('fs');
 const PORT = process.env.PORT || 3000; // Timeweb использует переменную окружения PORT
 const HOST = '0.0.0.0'; // Слушаем все интерфейсы
 
-// Конфигурация игры
-const GRID_SIZE = 20;
-const GAME_SPEED = 100;
-const FOOD_COUNT = 5;
-
 // Создаем HTTP-сервер
 const server = http.createServer((req, res) => {
   if (req.url === '/') {
@@ -24,22 +19,12 @@ const server = http.createServer((req, res) => {
       res.writeHead(200, { 'Content-Type': 'text/html' });
       res.end(data);
     });
-  } else if (req.url === '/style.css') {
-    const filePath = path.join(__dirname, 'style.css');
+  } else if (req.url === '/client.js') {
+    const filePath = path.join(__dirname, 'client.js');
     fs.readFile(filePath, (err, data) => {
       if (err) {
         res.writeHead(500);
-        return res.end('Error loading style.css');
-      }
-      res.writeHead(200, { 'Content-Type': 'text/css' });
-      res.end(data);
-    });
-  } else if (req.url === '/game.js') {
-    const filePath = path.join(__dirname, 'game.js');
-    fs.readFile(filePath, (err, data) => {
-      if (err) {
-        res.writeHead(500);
-        return res.end('Error loading game.js');
+        return res.end('Error loading client.js');
       }
       res.writeHead(200, { 'Content-Type': 'application/javascript' });
       res.end(data);
@@ -53,134 +38,44 @@ const server = http.createServer((req, res) => {
 // WebSocket сервер
 const wss = new WebSocket.Server({ server });
 
-let players = new Map();
-let food = [];
-let gameInterval;
-
-function generateFood() {
-  food = [];
-  for (let i = 0; i < FOOD_COUNT; i++) {
-    food.push({
-      x: Math.floor(Math.random() * GRID_SIZE),
-      y: Math.floor(Math.random() * GRID_SIZE)
-    });
-  }
-}
-
-function checkCollision(snake) {
-  // Проверка столкновения со стенами
-  if (snake[0].x < 0 || snake[0].x >= GRID_SIZE || 
-      snake[0].y < 0 || snake[0].y >= GRID_SIZE) {
-    return true;
-  }
-
-  // Проверка столкновения с собой
-  for (let i = 1; i < snake.length; i++) {
-    if (snake[0].x === snake[i].x && snake[0].y === snake[i].y) {
-      return true;
-    }
-  }
-
-  // Проверка столкновения с другими змейками
-  for (let [id, player] of players) {
-    if (id !== snake.id) {
-      for (let segment of player.snake) {
-        if (snake[0].x === segment.x && snake[0].y === segment.y) {
-          return true;
-        }
-      }
-    }
-  }
-
-  return false;
-}
-
-function updateGame() {
-  for (let [id, player] of players) {
-    const head = { ...player.snake[0] };
-    
-    // Обновление позиции головы
-    switch (player.direction) {
-      case 'up': head.y--; break;
-      case 'down': head.y++; break;
-      case 'left': head.x--; break;
-      case 'right': head.x++; break;
-    }
-
-    // Проверка столкновений
-    if (checkCollision(player.snake)) {
-      players.delete(id);
-      broadcastGameState();
-      continue;
-    }
-
-    // Добавление новой головы
-    player.snake.unshift(head);
-
-    // Проверка сбора еды
-    const foodIndex = food.findIndex(f => f.x === head.x && f.y === head.y);
-    if (foodIndex !== -1) {
-      food.splice(foodIndex, 1);
-      player.score++;
-      if (food.length === 0) {
-        generateFood();
-      }
-    } else {
-      player.snake.pop();
-    }
-  }
-
-  broadcastGameState();
-}
-
-function broadcastGameState() {
-  const gameState = {
-    players: Array.from(players.entries()).map(([id, player]) => ({
-      id,
-      snake: player.snake,
-      score: player.score
-    })),
-    food
-  };
-
-  wss.clients.forEach(client => {
-    if (client.readyState === WebSocket.OPEN) {
-      client.send(JSON.stringify(gameState));
-    }
-  });
-}
+let clients = [];
+let gameState = {
+  player1: null,
+  player2: null,
+  currentTurn: 1,
+  player1Board: null,
+  player2Board: null
+};
 
 wss.on('connection', (ws) => {
-  const id = Date.now().toString();
-  
-  players.set(id, {
-    snake: [{ x: 10, y: 10 }],
-    direction: 'right',
-    score: 0
-  });
-
-  if (food.length === 0) {
-    generateFood();
+  if (clients.length >= 2) {
+    ws.send(JSON.stringify({ type: 'full', message: 'Сервер переполнен. Максимум 2 игрока.' }));
+    ws.close();
+    return;
   }
 
-  if (!gameInterval) {
-    gameInterval = setInterval(updateGame, GAME_SPEED);
+  clients.push(ws);
+  console.log('Новый игрок подключен. Всего:', clients.length);
+
+  const playerNumber = clients.length;
+  ws.send(JSON.stringify({ 
+    type: 'start',
+    playerNumber: playerNumber,
+    message: `Вы игрок ${playerNumber}. Ожидайте подключения второго игрока.`
+  }));
+
+  if (clients.length === 2) {
+    broadcast({ 
+      type: 'message', 
+      message: 'Оба игрока подключены! Игра начинается.' 
+    });
   }
 
   ws.on('message', (message) => {
     try {
-      const data = JSON.parse(message);
-      if (data.type === 'direction' && players.has(id)) {
-        const player = players.get(id);
-        // Предотвращаем движение в противоположном направлении
-        if (
-          (data.direction === 'up' && player.direction !== 'down') ||
-          (data.direction === 'down' && player.direction !== 'up') ||
-          (data.direction === 'left' && player.direction !== 'right') ||
-          (data.direction === 'right' && player.direction !== 'left')
-        ) {
-          player.direction = data.direction;
-        }
+      const msg = JSON.parse(message);
+      if (msg.type === 'move') {
+        handleMove(msg, ws);
       }
     } catch (e) {
       console.error('Ошибка обработки сообщения:', e);
@@ -188,14 +83,87 @@ wss.on('connection', (ws) => {
   });
 
   ws.on('close', () => {
-    players.delete(id);
-    if (players.size === 0) {
-      clearInterval(gameInterval);
-      gameInterval = null;
+    console.log('Игрок отключился');
+    clients = clients.filter(client => client !== ws);
+    if (clients.length > 0) {
+      broadcast({ type: 'reset', message: 'Соперник отключился.' });
     }
-    broadcastGameState();
+    resetGame();
   });
 });
+
+function handleMove(msg, ws) {
+  const { position, playerNumber } = msg;
+  
+  if (playerNumber !== gameState.currentTurn) {
+    ws.send(JSON.stringify({ 
+      type: 'message', 
+      message: 'Сейчас не ваш ход!' 
+    }));
+    return;
+  }
+
+  const targetBoard = playerNumber === 1 ? gameState.player2Board : gameState.player1Board;
+  const hit = targetBoard[position] === 1;
+  
+  // Отправляем результат хода обоим игрокам
+  broadcast({
+    type: 'move',
+    playerNumber,
+    position,
+    hit
+  });
+
+  // Отправляем результат хода атакующему игроку
+  ws.send(JSON.stringify({
+    type: 'result',
+    position,
+    hit,
+    message: hit ? 'Попадание!' : 'Промах!'
+  }));
+
+  // Проверяем, не закончилась ли игра
+  if (checkGameOver(targetBoard)) {
+    broadcast({
+      type: 'gameover',
+      winner: playerNumber,
+      message: `Игрок ${playerNumber} победил!`
+    });
+    setTimeout(resetGame, 3000);
+    return;
+  }
+
+  // Передаем ход другому игроку
+  gameState.currentTurn = playerNumber === 1 ? 2 : 1;
+  broadcast({
+    type: 'message',
+    message: `Ход игрока ${gameState.currentTurn}`
+  });
+}
+
+function checkGameOver(board) {
+  return !board.includes(1); // Если на поле не осталось кораблей
+}
+
+function broadcast(message) {
+  clients.forEach(client => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(JSON.stringify(message));
+    }
+  });
+}
+
+function resetGame() {
+  gameState = {
+    player1: null,
+    player2: null,
+    currentTurn: 1,
+    player1Board: null,
+    player2Board: null
+  };
+  broadcast({ type: 'reset' });
+  console.log('Игра сброшена');
+}
 
 server.listen(PORT, HOST, () => {
   console.log(`Сервер запущен на http://${HOST}:${PORT}`);

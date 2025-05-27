@@ -3,23 +3,60 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Многопользовательская Змейка</title>
-  <link rel="stylesheet" href="style.css">
+  <title>Морской бой</title>
+  <style>
+    .game-container {
+      display: flex;
+      justify-content: space-around;
+      margin: 20px;
+    }
+    .board {
+      display: grid;
+      grid-template-columns: repeat(10, 30px);
+      grid-template-rows: repeat(10, 30px);
+      gap: 1px;
+      background-color: #ccc;
+      padding: 10px;
+    }
+    .cell {
+      width: 30px;
+      height: 30px;
+      background-color: #fff;
+      border: 1px solid #999;
+      cursor: pointer;
+    }
+    .cell.ship {
+      background-color: #666;
+    }
+    .cell.hit {
+      background-color: #f00;
+    }
+    .cell.miss {
+      background-color: #0f0;
+    }
+    .status {
+      text-align: center;
+      margin: 20px;
+      font-size: 18px;
+    }
+    .player-info {
+      text-align: center;
+      margin-bottom: 10px;
+    }
+  </style>
 </head>
 <body>
+  <div class="status" id="status">Ожидание подключения...</div>
   <div class="game-container">
-    <div class="game-header">
-      <h1>Змейка</h1>
-      <div class="score-container">
-        <div id="score">Счёт: 0</div>
-        <div id="players-count">Игроков онлайн: 0</div>
-      </div>
+    <div>
+      <div class="player-info">Ваше поле</div>
+      <div class="board" id="playerBoard"></div>
     </div>
-    <canvas id="gameCanvas"></canvas>
-    <div class="controls-info">
-      <p>Управление: Стрелки или WASD</p>
+    <div>
+      <div class="player-info">Поле противника</div>
+      <div class="board" id="opponentBoard"></div>
     </div>
   </div>
-  <script src="game.js"></script>
+  <script src="client.js"></script>
 </body>
 </html>
