@@ -45,6 +45,9 @@ const BULLET_SPEED = 10;
 const RELOAD_TIME = 1000; // 1 секунда
 const MAX_HEALTH = 100;
 const DAMAGE = 20;
+const TANK_WIDTH = 50;
+const TANK_HEIGHT = 50;
+const BULLET_SIZE = 5;
 
 class Game {
   constructor(player1, player2) {
@@ -89,7 +92,9 @@ class Game {
 }
 
 wss.on('connection', (ws) => {
-  console.log('Новый игрок подключился');
+  // Добавляем уникальный ID для каждого подключения
+  ws.id = Math.random().toString(36).substr(2, 9);
+  console.log('Новый игрок подключился, ID:', ws.id);
 
   if (waitingPlayers.size === 0) {
     waitingPlayers.add(ws);
@@ -102,11 +107,17 @@ wss.on('connection', (ws) => {
     games.set(ws, game);
     games.set(opponent, game);
 
+    // Отправляем начальное состояние с ID игроков
     game.broadcast({
       type: 'gameStart',
       gameState: {
-        players: Array.from(game.players.values()).map(p => ({
-          tank: p.tank
+        players: Array.from(game.players.entries()).map(([playerWs, p]) => ({
+          id: playerWs.id,
+          tank: {
+            ...p.tank,
+            width: TANK_WIDTH,
+            height: TANK_HEIGHT
+          }
         })),
         obstacles: game.obstacles
       }
@@ -124,16 +135,35 @@ wss.on('connection', (ws) => {
       
       switch (data.type) {
         case 'move':
-          player.tank.x = data.x;
-          player.tank.y = data.y;
-          player.tank.angle = data.angle;
-          game.broadcast({
-            type: 'updatePosition',
-            playerId: ws.id,
-            x: data.x,
-            y: data.y,
-            angle: data.angle
-          });
+          // Проверяем валидность координат
+          const newX = Math.max(0, Math.min(800 - TANK_WIDTH, data.x));
+          const newY = Math.max(0, Math.min(600 - TANK_HEIGHT, data.y));
+          
+          // Проверяем столкновения с препятствиями
+          let canMove = true;
+          for (const obstacle of game.obstacles) {
+            if (checkCollision(
+              { x: newX, y: newY, width: TANK_WIDTH, height: TANK_HEIGHT },
+              obstacle
+            )) {
+              canMove = false;
+              break;
+            }
+          }
+          
+          if (canMove) {
+            player.tank.x = newX;
+            player.tank.y = newY;
+            player.tank.angle = data.angle;
+            
+            game.broadcast({
+              type: 'updatePosition',
+              playerId: ws.id,
+              x: newX,
+              y: newY,
+              angle: data.angle
+            });
+          }
           break;
           
         case 'shoot':
@@ -141,8 +171,8 @@ wss.on('connection', (ws) => {
           if (now - player.tank.lastShot >= RELOAD_TIME) {
             player.tank.lastShot = now;
             const bullet = {
-              x: data.x,
-              y: data.y,
+              x: player.tank.x + (TANK_WIDTH / 2),
+              y: player.tank.y + (TANK_HEIGHT / 2),
               angle: data.angle,
               playerId: ws.id
             };
@@ -223,10 +253,15 @@ setInterval(() => {
 }, 1000 / 60); // 60 FPS
 
 function checkCollision(obj1, obj2) {
-  return obj1.x < obj2.x + obj2.width &&
-         obj1.x + obj1.width > obj2.x &&
-         obj1.y < obj2.y + obj2.height &&
-         obj1.y + obj1.height > obj2.y;
+  const obj1Width = obj1.width || BULLET_SIZE;
+  const obj1Height = obj1.height || BULLET_SIZE;
+  const obj2Width = obj2.width || TANK_WIDTH;
+  const obj2Height = obj2.height || TANK_HEIGHT;
+
+  return obj1.x < obj2.x + obj2Width &&
+         obj1.x + obj1Width > obj2.x &&
+         obj1.y < obj2.y + obj2Height &&
+         obj1.y + obj1Height > obj2.y;
 }
 
 server.listen(PORT, HOST, () => {
