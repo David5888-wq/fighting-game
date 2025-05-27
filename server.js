@@ -7,182 +7,180 @@ const fs = require('fs');
 const PORT = process.env.PORT || 3000; // Timeweb использует переменную окружения PORT
 const HOST = '0.0.0.0'; // Слушаем все интерфейсы
 
+// Конфигурация игры
+const GRID_SIZE = 20;
+const GAME_SPEED = 100;
+const FOOD_COUNT = 5;
+
 // Создаем HTTP-сервер
 const server = http.createServer((req, res) => {
-  const filePath = req.url === '/' ? 'index.html' : req.url.slice(1);
-  const fullPath = path.join(__dirname, filePath);
-  
-  fs.readFile(fullPath, (err, data) => {
-    if (err) {
-      res.writeHead(404);
-      return res.end('File not found');
-    }
-    
-    const ext = path.extname(filePath);
-    const contentType = {
-      '.html': 'text/html',
-      '.js': 'text/javascript',
-      '.css': 'text/css',
-      '.png': 'image/png',
-      '.jpg': 'image/jpeg',
-    }[ext] || 'text/plain';
-    
-    res.writeHead(200, { 'Content-Type': contentType });
-    res.end(data);
-  });
+  if (req.url === '/') {
+    const filePath = path.join(__dirname, 'index.html');
+    fs.readFile(filePath, (err, data) => {
+      if (err) {
+        res.writeHead(500);
+        return res.end('Error loading index.html');
+      }
+      res.writeHead(200, { 'Content-Type': 'text/html' });
+      res.end(data);
+    });
+  } else if (req.url === '/style.css') {
+    const filePath = path.join(__dirname, 'style.css');
+    fs.readFile(filePath, (err, data) => {
+      if (err) {
+        res.writeHead(500);
+        return res.end('Error loading style.css');
+      }
+      res.writeHead(200, { 'Content-Type': 'text/css' });
+      res.end(data);
+    });
+  } else if (req.url === '/game.js') {
+    const filePath = path.join(__dirname, 'game.js');
+    fs.readFile(filePath, (err, data) => {
+      if (err) {
+        res.writeHead(500);
+        return res.end('Error loading game.js');
+      }
+      res.writeHead(200, { 'Content-Type': 'application/javascript' });
+      res.end(data);
+    });
+  } else {
+    res.writeHead(404);
+    res.end();
+  }
 });
 
 // WebSocket сервер
 const wss = new WebSocket.Server({ server });
 
-// Состояние игры
-const games = new Map(); // Map для хранения состояний игр
-const waitingPlayers = new Set(); // Множество ожидающих игроков
+let players = new Map();
+let food = [];
+let gameInterval;
 
-// Константы игры
-const TANK_SPEED = 5;
-const BULLET_SPEED = 10;
-const RELOAD_TIME = 1000; // 1 секунда
-const MAX_HEALTH = 100;
-const DAMAGE = 20;
-const TANK_WIDTH = 50;
-const TANK_HEIGHT = 50;
-const BULLET_SIZE = 5;
-
-class Game {
-  constructor(player1, player2) {
-    this.id = Math.random().toString(36).substr(2, 9);
-    this.players = new Map([
-      [player1, {
-        ws: player1,
-        tank: {
-          x: 100,
-          y: 100,
-          angle: 0,
-          health: MAX_HEALTH,
-          lastShot: 0
-        }
-      }],
-      [player2, {
-        ws: player2,
-        tank: {
-          x: 700,
-          y: 500,
-          angle: Math.PI,
-          health: MAX_HEALTH,
-          lastShot: 0
-        }
-      }]
-    ]);
-    this.bullets = [];
-    this.obstacles = [
-      { x: 400, y: 300, width: 50, height: 50 },
-      { x: 200, y: 200, width: 50, height: 50 },
-      { x: 600, y: 400, width: 50, height: 50 }
-    ];
-  }
-
-  broadcast(message) {
-    for (const [ws] of this.players) {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify(message));
-      }
-    }
+function generateFood() {
+  food = [];
+  for (let i = 0; i < FOOD_COUNT; i++) {
+    food.push({
+      x: Math.floor(Math.random() * GRID_SIZE),
+      y: Math.floor(Math.random() * GRID_SIZE)
+    });
   }
 }
 
-wss.on('connection', (ws) => {
-  // Добавляем уникальный ID для каждого подключения
-  ws.id = Math.random().toString(36).substr(2, 9);
-  console.log('Новый игрок подключился, ID:', ws.id);
+function checkCollision(snake) {
+  // Проверка столкновения со стенами
+  if (snake[0].x < 0 || snake[0].x >= GRID_SIZE || 
+      snake[0].y < 0 || snake[0].y >= GRID_SIZE) {
+    return true;
+  }
 
-  if (waitingPlayers.size === 0) {
-    waitingPlayers.add(ws);
-    ws.send(JSON.stringify({ type: 'waiting', message: 'Ожидание второго игрока...' }));
-  } else {
-    const opponent = waitingPlayers.values().next().value;
-    waitingPlayers.delete(opponent);
-    
-    const game = new Game(ws, opponent);
-    games.set(ws, game);
-    games.set(opponent, game);
+  // Проверка столкновения с собой
+  for (let i = 1; i < snake.length; i++) {
+    if (snake[0].x === snake[i].x && snake[0].y === snake[i].y) {
+      return true;
+    }
+  }
 
-    // Отправляем начальное состояние с ID игроков
-    game.broadcast({
-      type: 'gameStart',
-      gameState: {
-        players: Array.from(game.players.entries()).map(([playerWs, p]) => ({
-          id: playerWs.id,
-          tank: {
-            ...p.tank,
-            width: TANK_WIDTH,
-            height: TANK_HEIGHT
-          }
-        })),
-        obstacles: game.obstacles
+  // Проверка столкновения с другими змейками
+  for (let [id, player] of players) {
+    if (id !== snake.id) {
+      for (let segment of player.snake) {
+        if (snake[0].x === segment.x && snake[0].y === segment.y) {
+          return true;
+        }
       }
-    });
+    }
+  }
+
+  return false;
+}
+
+function updateGame() {
+  for (let [id, player] of players) {
+    const head = { ...player.snake[0] };
+    
+    // Обновление позиции головы
+    switch (player.direction) {
+      case 'up': head.y--; break;
+      case 'down': head.y++; break;
+      case 'left': head.x--; break;
+      case 'right': head.x++; break;
+    }
+
+    // Проверка столкновений
+    if (checkCollision(player.snake)) {
+      players.delete(id);
+      broadcastGameState();
+      continue;
+    }
+
+    // Добавление новой головы
+    player.snake.unshift(head);
+
+    // Проверка сбора еды
+    const foodIndex = food.findIndex(f => f.x === head.x && f.y === head.y);
+    if (foodIndex !== -1) {
+      food.splice(foodIndex, 1);
+      player.score++;
+      if (food.length === 0) {
+        generateFood();
+      }
+    } else {
+      player.snake.pop();
+    }
+  }
+
+  broadcastGameState();
+}
+
+function broadcastGameState() {
+  const gameState = {
+    players: Array.from(players.entries()).map(([id, player]) => ({
+      id,
+      snake: player.snake,
+      score: player.score
+    })),
+    food
+  };
+
+  wss.clients.forEach(client => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(JSON.stringify(gameState));
+    }
+  });
+}
+
+wss.on('connection', (ws) => {
+  const id = Date.now().toString();
+  
+  players.set(id, {
+    snake: [{ x: 10, y: 10 }],
+    direction: 'right',
+    score: 0
+  });
+
+  if (food.length === 0) {
+    generateFood();
+  }
+
+  if (!gameInterval) {
+    gameInterval = setInterval(updateGame, GAME_SPEED);
   }
 
   ws.on('message', (message) => {
     try {
       const data = JSON.parse(message);
-      const game = games.get(ws);
-      
-      if (!game) return;
-      
-      const player = game.players.get(ws);
-      
-      switch (data.type) {
-        case 'move':
-          // Проверяем валидность координат
-          const newX = Math.max(0, Math.min(800 - TANK_WIDTH, data.x));
-          const newY = Math.max(0, Math.min(600 - TANK_HEIGHT, data.y));
-          
-          // Проверяем столкновения с препятствиями
-          let canMove = true;
-          for (const obstacle of game.obstacles) {
-            if (checkCollision(
-              { x: newX, y: newY, width: TANK_WIDTH, height: TANK_HEIGHT },
-              obstacle
-            )) {
-              canMove = false;
-              break;
-            }
-          }
-          
-          if (canMove) {
-            player.tank.x = newX;
-            player.tank.y = newY;
-            player.tank.angle = data.angle;
-            
-            game.broadcast({
-              type: 'updatePosition',
-              playerId: ws.id,
-              x: newX,
-              y: newY,
-              angle: data.angle
-            });
-          }
-          break;
-          
-        case 'shoot':
-          const now = Date.now();
-          if (now - player.tank.lastShot >= RELOAD_TIME) {
-            player.tank.lastShot = now;
-            const bullet = {
-              x: player.tank.x + (TANK_WIDTH / 2),
-              y: player.tank.y + (TANK_HEIGHT / 2),
-              angle: data.angle,
-              playerId: ws.id
-            };
-            game.bullets.push(bullet);
-            game.broadcast({
-              type: 'newBullet',
-              bullet
-            });
-          }
-          break;
+      if (data.type === 'direction' && players.has(id)) {
+        const player = players.get(id);
+        // Предотвращаем движение в противоположном направлении
+        if (
+          (data.direction === 'up' && player.direction !== 'down') ||
+          (data.direction === 'down' && player.direction !== 'up') ||
+          (data.direction === 'left' && player.direction !== 'right') ||
+          (data.direction === 'right' && player.direction !== 'left')
+        ) {
+          player.direction = data.direction;
+        }
       }
     } catch (e) {
       console.error('Ошибка обработки сообщения:', e);
@@ -190,79 +188,14 @@ wss.on('connection', (ws) => {
   });
 
   ws.on('close', () => {
-    console.log('Игрок отключился');
-    waitingPlayers.delete(ws);
-    const game = games.get(ws);
-    
-    if (game) {
-      for (const [player] of game.players) {
-        games.delete(player);
-        if (player !== ws && player.readyState === WebSocket.OPEN) {
-          player.send(JSON.stringify({
-            type: 'gameOver',
-            message: 'Противник отключился'
-          }));
-        }
-      }
+    players.delete(id);
+    if (players.size === 0) {
+      clearInterval(gameInterval);
+      gameInterval = null;
     }
+    broadcastGameState();
   });
 });
-
-// Игровой цикл для обработки физики
-setInterval(() => {
-  for (const [, game] of games) {
-    // Обновление позиций пуль
-    game.bullets = game.bullets.filter(bullet => {
-      bullet.x += Math.cos(bullet.angle) * BULLET_SPEED;
-      bullet.y += Math.sin(bullet.angle) * BULLET_SPEED;
-
-      // Проверка столкновений с препятствиями
-      for (const obstacle of game.obstacles) {
-        if (checkCollision(bullet, obstacle)) {
-          return false;
-        }
-      }
-
-      // Проверка столкновений с танками
-      for (const [ws, player] of game.players) {
-        if (ws.id !== bullet.playerId) {
-          const tank = player.tank;
-          if (checkCollision(bullet, tank)) {
-            tank.health -= DAMAGE;
-            game.broadcast({
-              type: 'hit',
-              targetId: ws.id,
-              health: tank.health
-            });
-
-            if (tank.health <= 0) {
-              game.broadcast({
-                type: 'gameOver',
-                winnerId: bullet.playerId
-              });
-            }
-            return false;
-          }
-        }
-      }
-
-      // Удаление пуль, вышедших за пределы поля
-      return bullet.x >= 0 && bullet.x <= 800 && bullet.y >= 0 && bullet.y <= 600;
-    });
-  }
-}, 1000 / 60); // 60 FPS
-
-function checkCollision(obj1, obj2) {
-  const obj1Width = obj1.width || BULLET_SIZE;
-  const obj1Height = obj1.height || BULLET_SIZE;
-  const obj2Width = obj2.width || TANK_WIDTH;
-  const obj2Height = obj2.height || TANK_HEIGHT;
-
-  return obj1.x < obj2.x + obj2Width &&
-         obj1.x + obj1Width > obj2.x &&
-         obj1.y < obj2.y + obj2Height &&
-         obj1.y + obj1Height > obj2.y;
-}
 
 server.listen(PORT, HOST, () => {
   console.log(`Сервер запущен на http://${HOST}:${PORT}`);

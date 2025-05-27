@@ -1,249 +1,142 @@
-// Game constants
-const TANK_SPEED = 5;
-const BULLET_SPEED = 10;
-const RELOAD_TIME = 1000;
-const MAX_HEALTH = 100;
-const TANK_SIZE = 30;
-
-// Game state
-let gameState = {
-    players: [],
-    obstacles: [],
-    bullets: [],
-    localPlayer: null,
-    enemyPlayer: null
-};
-
-// Canvas setup
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
+const scoreElement = document.getElementById('score');
+const playersCountElement = document.getElementById('players-count');
 
-// Game assets
-const tankImage = new Image();
-tankImage.src = 'data:image/svg+xml,' + encodeURIComponent(`
-    <svg width="30" height="30" xmlns="http://www.w3.org/2000/svg">
-        <rect x="5" y="8" width="20" height="14" fill="#3498db"/>
-        <rect x="12" y="4" width="6" height="22" fill="#2980b9"/>
-        <rect x="13" y="0" width="4" height="30" fill="#2980b9"/>
-    </svg>
-`);
+// Настройка размера canvas
+const CELL_SIZE = 20;
+const GRID_SIZE = 20;
+canvas.width = CELL_SIZE * GRID_SIZE;
+canvas.height = CELL_SIZE * GRID_SIZE;
 
-// WebSocket connection
-const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-const ws = new WebSocket(`${protocol}//${window.location.host}`);
+// Подключение к WebSocket серверу
+const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+const wsUrl = wsProtocol + window.location.host;
+const ws = new WebSocket(wsUrl);
 
-// Input state
+let gameState = {
+    players: [],
+    food: []
+};
+
+// Цвета для разных игроков
+const colors = [
+    '#4CAF50', // Зеленый
+    '#2196F3', // Синий
+    '#FFC107', // Желтый
+    '#F44336', // Красный
+    '#9C27B0', // Фиолетовый
+    '#00BCD4'  // Голубой
+];
+
+// Обработка клавиш
 const keys = {
-    w: false,
-    s: false,
-    a: false,
-    d: false,
-    space: false
+    ArrowUp: 'up',
+    ArrowDown: 'down',
+    ArrowLeft: 'left',
+    ArrowRight: 'right',
+    w: 'up',
+    s: 'down',
+    a: 'left',
+    d: 'right'
 };
 
-// Event listeners
-window.addEventListener('keydown', (e) => {
-    switch(e.key.toLowerCase()) {
-        case 'w': keys.w = true; break;
-        case 's': keys.s = true; break;
-        case 'a': keys.a = true; break;
-        case 'd': keys.d = true; break;
-        case ' ': keys.space = true; break;
+document.addEventListener('keydown', (e) => {
+    const direction = keys[e.key.toLowerCase()];
+    if (direction) {
+        ws.send(JSON.stringify({
+            type: 'direction',
+            direction
+        }));
     }
 });
 
-window.addEventListener('keyup', (e) => {
-    switch(e.key.toLowerCase()) {
-        case 'w': keys.w = false; break;
-        case 's': keys.s = false; break;
-        case 'a': keys.a = false; break;
-        case 'd': keys.d = false; break;
-        case ' ': keys.space = false; break;
-    }
-});
-
-// WebSocket message handling
-ws.onmessage = (event) => {
-    const message = JSON.parse(event.data);
-    
-    switch(message.type) {
-        case 'waiting':
-            updateStatus(message.message);
-            break;
-            
-        case 'gameStart':
-            gameState.players = message.gameState.players;
-            gameState.obstacles = message.gameState.obstacles;
-            // Find local player by ID (assuming server sends localPlayerId in gameStart)
-            const localPlayerId = message.localPlayerId; // !!! Verify if server sends this field !!!
-            gameState.localPlayer = gameState.players.find(player => player.id === localPlayerId);
-            gameState.enemyPlayer = gameState.players.find(player => player.id !== localPlayerId);
-
-            if (!gameState.localPlayer) {
-                console.error("Local player not found in gameStart message:", message);
-                updateStatus("Ошибка: Локальный игрок не найден");
-                return;
-            }
-
-            updateStatus('Игра началась!');
-            updateHealthBars(); // Update health bars initially
-            break;
-            
-        case 'updatePosition':
-            const player = gameState.players.find(p => p.id === message.playerId);
-            if (player) {
-                player.tank.x = message.x;
-                player.tank.y = message.y;
-                player.tank.angle = message.angle;
-            }
-            break;
-            
-        case 'newBullet':
-            gameState.bullets.push(message.bullet);
-            break;
-            
-        case 'hit':
-            if (message.targetId === ws.id) {
-                gameState.localPlayer.tank.health = message.health;
-                updateHealthBars();
-            } else {
-                gameState.enemyPlayer.tank.health = message.health;
-                updateHealthBars();
-            }
-            break;
-            
-        case 'gameOver':
-            const winner = message.winnerId === ws.id ? 'Вы победили!' : 'Вы проиграли!';
-            updateStatus(winner);
-            break;
-    }
-};
-
-// Game rendering
-function render() {
-    // Clear canvas
-    ctx.fillStyle = '#1a2634';
+// Отрисовка игры
+function draw() {
+    // Очистка canvas
+    ctx.fillStyle = '#2a2a2a';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // Draw obstacles
-    ctx.fillStyle = '#34495e';
-    gameState.obstacles.forEach(obstacle => {
-        ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
-    });
-    
-    // Draw tanks
-    gameState.players.forEach(player => {
-        const tank = player.tank;
-        ctx.save();
-        ctx.translate(tank.x, tank.y);
-        ctx.rotate(tank.angle);
-        ctx.drawImage(tankImage, -TANK_SIZE/2, -TANK_SIZE/2, TANK_SIZE, TANK_SIZE);
-        ctx.restore();
-    });
-    
-    // Draw bullets
-    ctx.fillStyle = '#e74c3c';
-    gameState.bullets.forEach(bullet => {
+
+    // Отрисовка еды
+    ctx.fillStyle = '#FF0000';
+    gameState.food.forEach(food => {
         ctx.beginPath();
-        ctx.arc(bullet.x, bullet.y, 3, 0, Math.PI * 2);
+        ctx.arc(
+            food.x * CELL_SIZE + CELL_SIZE / 2,
+            food.y * CELL_SIZE + CELL_SIZE / 2,
+            CELL_SIZE / 2 - 2,
+            0,
+            Math.PI * 2
+        );
         ctx.fill();
     });
+
+    // Отрисовка змей
+    gameState.players.forEach((player, index) => {
+        const color = colors[index % colors.length];
+        
+        // Отрисовка тела змейки
+        ctx.fillStyle = color;
+        player.snake.forEach((segment, i) => {
+            if (i === 0) {
+                // Голова змейки
+                ctx.fillStyle = color;
+                ctx.fillRect(
+                    segment.x * CELL_SIZE,
+                    segment.y * CELL_SIZE,
+                    CELL_SIZE,
+                    CELL_SIZE
+                );
+            } else {
+                // Тело змейки
+                ctx.fillStyle = color + '80'; // Добавляем прозрачность
+                ctx.fillRect(
+                    segment.x * CELL_SIZE + 1,
+                    segment.y * CELL_SIZE + 1,
+                    CELL_SIZE - 2,
+                    CELL_SIZE - 2
+                );
+            }
+        });
+    });
 }
 
-// Game update
-function update() {
-    if (!gameState.localPlayer) return;
+// Обновление состояния игры
+function updateGameState(newState) {
+    gameState = newState;
+    playersCountElement.textContent = `Игроков онлайн: ${gameState.players.length}`;
     
-    const tank = gameState.localPlayer.tank;
-    let moved = false;
-    
-    // Tank movement
-    if (keys.w) {
-        tank.x += Math.cos(tank.angle) * TANK_SPEED;
-        tank.y += Math.sin(tank.angle) * TANK_SPEED;
-        moved = true;
-    }
-    if (keys.s) {
-        tank.x -= Math.cos(tank.angle) * TANK_SPEED;
-        tank.y -= Math.sin(tank.angle) * TANK_SPEED;
-        moved = true;
-    }
-    if (keys.a) {
-        tank.angle -= 0.05;
-        moved = true;
-    }
-    if (keys.d) {
-        tank.angle += 0.05;
-        moved = true;
-    }
-    
-    // Keep tank in bounds
-    tank.x = Math.max(TANK_SIZE/2, Math.min(canvas.width - TANK_SIZE/2, tank.x));
-    tank.y = Math.max(TANK_SIZE/2, Math.min(canvas.height - TANK_SIZE/2, tank.y));
-    
-    // Send position update if moved
-    if (moved) {
-        ws.send(JSON.stringify({
-            type: 'move',
-            x: tank.x,
-            y: tank.y,
-            angle: tank.angle
-        }));
-    }
-    
-    // Shooting
-    if (keys.space && Date.now() - tank.lastShot >= RELOAD_TIME) {
-        tank.lastShot = Date.now();
-        ws.send(JSON.stringify({
-            type: 'shoot',
-            x: tank.x + Math.cos(tank.angle) * TANK_SIZE,
-            y: tank.y + Math.sin(tank.angle) * TANK_SIZE,
-            angle: tank.angle
-        }));
+    // Обновление счета текущего игрока
+    const myPlayer = gameState.players.find(p => p.id === myId);
+    if (myPlayer) {
+        scoreElement.textContent = `Счёт: ${myPlayer.score}`;
     }
 }
 
-// UI updates
-function updateStatus(message) {
-    document.getElementById('status').textContent = message;
-}
+let myId = null;
 
-function updateHealthBars() {
-    if (!gameState.localPlayer || !gameState.enemyPlayer) return;
-    
-    const playerHealthBar = document.querySelector('#playerHealth > div');
-    const enemyHealthBar = document.querySelector('#enemyHealth > div');
-    const playerHealthText = document.querySelector('#playerHealth > span');
-    const enemyHealthText = document.querySelector('#enemyHealth > span');
-    
-    const playerHealth = (gameState.localPlayer.tank.health / MAX_HEALTH) * 100;
-    const enemyHealth = (gameState.enemyPlayer.tank.health / MAX_HEALTH) * 100;
-    
-    playerHealthBar.style.width = `${playerHealth}%`;
-    enemyHealthBar.style.width = `${enemyHealth}%`;
-    playerHealthText.textContent = `${Math.round(playerHealth)}%`;
-    enemyHealthText.textContent = `${Math.round(enemyHealth)}%`;
-}
+// Обработка сообщений от сервера
+ws.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    if (!myId && data.players) {
+        myId = data.players[0]?.id;
+    }
+    updateGameState(data);
+};
 
-// Game loop
+// Анимация
 function gameLoop() {
-    update();
-    render();
+    draw();
     requestAnimationFrame(gameLoop);
 }
 
-// Start game loop
 gameLoop();
 
-// WebSocket connection status
-ws.onopen = () => {
-    updateStatus('Подключено к серверу');
+// Обработка ошибок подключения
+ws.onerror = (error) => {
+    console.error('WebSocket error:', error);
 };
 
 ws.onclose = () => {
-    updateStatus('Соединение потеряно');
-};
-
-ws.onerror = () => {
-    updateStatus('Ошибка соединения');
-};
+    console.log('WebSocket connection closed');
+}; 
