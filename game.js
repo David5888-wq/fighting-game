@@ -74,9 +74,19 @@ ws.onmessage = (event) => {
         case 'gameStart':
             gameState.players = message.gameState.players;
             gameState.obstacles = message.gameState.obstacles;
-            gameState.localPlayer = gameState.players[0];
-            gameState.enemyPlayer = gameState.players[1];
+            // Find local player by ID (assuming server sends localPlayerId in gameStart)
+            const localPlayerId = message.localPlayerId; // !!! Verify if server sends this field !!!
+            gameState.localPlayer = gameState.players.find(player => player.id === localPlayerId);
+            gameState.enemyPlayer = gameState.players.find(player => player.id !== localPlayerId);
+
+            if (!gameState.localPlayer) {
+                console.error("Local player not found in gameStart message:", message);
+                updateStatus("Ошибка: Локальный игрок не найден");
+                return;
+            }
+
             updateStatus('Игра началась!');
+            updateHealthBars(); // Update health bars initially
             break;
             
         case 'updatePosition':
