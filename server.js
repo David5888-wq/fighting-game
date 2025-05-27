@@ -76,6 +76,8 @@ wss.on('connection', (ws) => {
       const msg = JSON.parse(message);
       if (msg.type === 'move') {
         handleMove(msg, ws);
+      } else if (msg.type === 'board') {
+        handleBoard(msg, ws);
       }
     } catch (e) {
       console.error('Ошибка обработки сообщения:', e);
@@ -92,6 +94,23 @@ wss.on('connection', (ws) => {
   });
 });
 
+function handleBoard(msg, ws) {
+  const { playerNumber, board } = msg;
+  if (playerNumber === 1) {
+    gameState.player1Board = board;
+  } else if (playerNumber === 2) {
+    gameState.player2Board = board;
+  }
+  console.log(`Поле игрока ${playerNumber} получено`);
+  
+  if (gameState.player1Board && gameState.player2Board) {
+    broadcast({ 
+      type: 'message', 
+      message: `Оба игрока готовы. Ход игрока ${gameState.currentTurn}` 
+    });
+  }
+}
+
 function handleMove(msg, ws) {
   const { position, playerNumber } = msg;
   
@@ -106,21 +125,34 @@ function handleMove(msg, ws) {
   const targetBoard = playerNumber === 1 ? gameState.player2Board : gameState.player1Board;
   const hit = targetBoard[position] === 1;
   
-  // Отправляем результат хода обоим игрокам
-  broadcast({
-    type: 'move',
-    playerNumber,
-    position,
-    hit
-  });
+  // Обновляем состояние поля на сервере
+  targetBoard[position] = hit ? 2 : 3;
 
-  // Отправляем результат хода атакующему игроку
+  // Отправляем результат хода атакующему игроку (его поле противника)
   ws.send(JSON.stringify({
     type: 'result',
     position,
     hit,
     message: hit ? 'Попадание!' : 'Промах!'
   }));
+  
+  // Отправляем результат хода другому игроку (его собственное поле)
+  const opponentWs = clients.find(client => {
+      // Проверяем, что клиент подключен и является другим игроком
+      // Нужно убедиться, что у нас есть способ идентифицировать клиентов по номеру игрока
+      // В текущей реализации clients - это просто массив WebSocket объектов
+      // Давайте добавим свойство playerNumber к WebSocket объекту при подключении
+      return client !== ws && client.readyState === WebSocket.OPEN;
+  });
+
+  if (opponentWs) {
+      opponentWs.send(JSON.stringify({
+          type: 'move', // Используем тип move, чтобы обновить их поле
+          playerNumber,
+          position,
+          hit // Отправляем информацию о попадании, чтобы они знали, как обновить свою доску
+      }));
+  }
 
   // Проверяем, не закончилась ли игра
   if (checkGameOver(targetBoard)) {

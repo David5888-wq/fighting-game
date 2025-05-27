@@ -116,6 +116,7 @@ ws.onopen = () => {
 
 ws.onmessage = (event) => {
     const msg = JSON.parse(event.data);
+    console.log('Получено сообщение от сервера:', msg);
     
     switch (msg.type) {
         case 'start':
@@ -126,6 +127,13 @@ ws.onmessage = (event) => {
             updateBoard(opponentBoardState, opponentBoard);
             gameActive = true;
             statusEl.textContent = `Вы игрок ${myPlayerNumber}. ${msg.message}`;
+            
+            // Отправляем сгенерированное поле на сервер
+            ws.send(JSON.stringify({
+                type: 'board',
+                playerNumber: myPlayerNumber,
+                board: myBoard
+            }));
             break;
 
         case 'move':
