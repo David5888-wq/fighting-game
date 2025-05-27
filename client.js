@@ -96,8 +96,12 @@ function updateBoard(board, boardElement, showShips = false) {
 }
 
 function makeMove(index) {
-    if (!gameActive || myPlayerNumber === null) return;
+    if (!gameActive || myPlayerNumber === null) {
+        console.log('Игра не активна или номер игрока не определен.');
+        return;
+    }
     
+    console.log('Отправка хода:', index);
     ws.send(JSON.stringify({
         type: 'move',
         position: index,
