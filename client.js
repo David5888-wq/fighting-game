@@ -100,6 +100,12 @@ function makeMove(index) {
         console.log('Игра не активна или номер игрока не определен.');
         return;
     }
+
+    // Проверяем, была ли уже произведена попытка выстрела по этой клетке
+    if (opponentBoardState[index] === 2 || opponentBoardState[index] === 3) {
+        console.log('По этой клетке уже стреляли.');
+        return;
+    }
     
     console.log('Отправка хода:', index);
     ws.send(JSON.stringify({
